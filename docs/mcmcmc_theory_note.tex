@@ -1,0 +1,984 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{bm}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\1}{\mathbf{1}}
+\newcommand{\calU}{\mathcal{U}}
+\newcommand{\calS}{\mathcal{S}}
+\newcommand{\calX}{\mathcal{X}}
+\newcommand{\calN}{\mathcal{N}}
+\newcommand{\Pgen}{P_{\mathrm{gen}}}
+\newcommand{\Pcond}{P_{\mathrm{cond}}}
+\newcommand{\sgn}{\operatorname{sgn}}
+\newcommand{\card}[1]{\left|#1\right|}
+
+\title{MCMCMC Set Heat-Bath Sampling for CDet Integrals}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\tableofcontents
+
+\section{Purpose}
+
+This note describes the ``many-configuration Markov-chain Monte Carlo''
+(MCMCMC) / set heat-bath algorithm that is currently being tested as a
+replacement for the old order-update histogram MCMC.  The goal is to estimate
+several signed CDet integrals at different perturbation orders by running a
+single Markov chain on a larger ``envelope'' configuration space.
+
+The main idea is:
+\begin{quote}
+At every Monte Carlo step we keep an envelope of \(N\) vertices.  Inside this
+envelope we can see many lower-order configurations at once, namely all
+subsets \(S\subset\{1,\ldots,N\}\).  Instead of proposing one add/remove move
+and accepting or rejecting it, we compute the heat-bath flux of all visible
+subsets, accumulate their signed contribution exactly, choose one subset with
+probability proportional to its absolute flux, and regenerate the missing
+vertices.
+\end{quote}
+
+This is rejection-free in the usual Metropolis sense: every heat-bath update
+produces a new envelope.  The analog of an ``acceptance ratio'' is therefore
+identically one.  The useful diagnostics are instead the chosen subset
+cardinality, the retained fraction \(\card{S}/N\), and the autocorrelation of
+the measured order signals.
+
+\section{Target signed integrals}
+
+Let a single vertex be denoted by
+\[
+  X\in\calX,
+\]
+where \(\calX\) is equipped with a normalized base measure \(\mu\).  In the
+current C++ code the Monte Carlo coordinate is
+\[
+  z=(s,r_1,r_2,a)\in [0,1)^4,
+\]
+with the map
+\[
+  \tau=\beta s,\qquad
+  x=\lfloor N_1 r_1\rfloor,\qquad
+  y=\lfloor N_2 r_2\rfloor,\qquad
+  \alpha=\lfloor 2a\rfloor \in\{0,1\}.
+\]
+Thus the sampler may be viewed either as sampling the continuous unit cube, or
+as sampling a mixed object consisting of imaginary time, lattice site, and
+replica index.
+
+For each perturbation order \(u\) we have a signed real integrand
+\[
+  C_u(X_1,\ldots,X_u),
+\]
+and the order-\(u\) integral is
+\[
+  I_u
+  =
+  \int_{\calX^u}
+  C_u(X_1,\ldots,X_u)\,
+  \dd\mu(X_1)\cdots \dd\mu(X_u).
+\]
+The code path currently evaluates \(C_u\) through
+\[
+  \texttt{integrand\_temp\_typed}
+\]
+after building the replica Green-function Chebyshev tables.
+
+The algorithm estimates ratios
+\[
+  \frac{I_u}{I_r},
+\]
+where \(r\) is a chosen reference/normalization order.  If \(I_r\) is known
+from a separate calculation, all \(I_u\) can be put on an absolute scale.
+
+\section{Envelope configurations and subsets}
+
+Choose an envelope order \(N\).  In the current test for measured orders
+\[
+  \calU=\{2,3,4\},
+\]
+we choose
+\[
+  N=5.
+\]
+This is important: using \(N>u_{\max}\) guarantees that after selecting any
+measured subset there is at least one missing vertex to regenerate, so the
+chain can actually move.  If one includes the full set \(u=N\), one must add
+an additional refresh mechanism or explicitly exclude the full-set choice, as
+done in the reference FastFeynmanDiagrammatics code.
+
+An envelope configuration is
+\[
+  V=(X_1,\ldots,X_N)\in\calX^N.
+\]
+For a label subset \(S\subseteq [N]\), where \([N]=\{1,\ldots,N\}\), write
+\[
+  V_S=\{X_i:i\in S\},\qquad
+  \bar S=[N]\setminus S,\qquad
+  u=\card{S}.
+\]
+The visible order-\(u\) configurations inside \(V\) are all subsets with
+\(\card{S}=u\).  The binomial number
+\[
+  B_{N,u}=\binom{N}{u}
+\]
+will appear repeatedly.  It compensates for the fact that one envelope
+contains \(B_{N,u}\) labeled order-\(u\) subsets.
+
+\section{The conditional generator}
+
+\subsection{Most general form}
+
+For every subset \(S\) that may be kept, the algorithm needs a normalized
+conditional density
+\[
+  Q_{\bar S|S}(V_{\bar S}\mid V_S)
+\]
+for generating the missing vertices \(V_{\bar S}\) from the retained vertices
+\(V_S\).  The only strict requirements are:
+\begin{align}
+  Q_{\bar S|S}(V_{\bar S}\mid V_S) &\ge 0,\\
+  \int_{\calX^{N-\card{S}}}
+  Q_{\bar S|S}(V_{\bar S}\mid V_S)\,
+  \dd\mu(V_{\bar S}) &= 1,
+\end{align}
+and the density must be evaluable for the old complement as well as samplable
+for the new complement.
+
+This is the first major freedom of the algorithm.  Any normalized conditional
+generator gives an unbiased ratio estimator, provided the same generator is
+used consistently in the flux and in the envelope update.
+
+\subsection{Pair-seed construction used by FastFeynmanDiagrammatics}
+
+The reference implementation constructs \(Q_{\bar S|S}\) from a normalized
+pair seed
+\[
+  q(X'\mid X),\qquad
+  \int_{\calX}q(X'\mid X)\,\dd\mu(X')=1.
+\]
+Starting from a set \(B\), a new vertex is generated by first choosing a
+parent vertex in \(B\) and then drawing from the pair seed.  With uniform
+parent selection,
+\[
+  q(X\mid B)
+  =
+  \frac{1}{\card{B}}\sum_{Y\in B} q(X\mid Y).
+\]
+
+For two disjoint sets \(A\) and \(B\), define
+\[
+  \Pgen(A\mid B)
+\]
+as the probability density of generating all vertices in \(A\), in any order,
+starting from \(B\).  The recursion is
+\begin{align}
+  \Pgen(\varnothing\mid B)&=1,\\
+  \Pgen(A\mid B)
+  &=
+  \frac{1}{\card{A}\card{B}}
+  \sum_{X\in A}\sum_{Y\in B}
+  q(X\mid Y)\,
+  \Pgen(A\setminus\{X\}\mid B\cup\{X\}).
+  \label{eq:pgen-recursion}
+\end{align}
+The factor \(1/\card{A}\) averages over which vertex of \(A\) was generated
+first; the factor \(1/\card{B}\) is the uniform parent choice.
+
+For a fixed envelope \(V\), it is convenient to write
+\[
+  \Pcond^V(A)
+  :=
+  \Pgen(V_A\mid V_{\bar A}).
+\]
+Then for \(A\ne\varnothing\),
+\begin{align}
+  \Pcond^V(A)
+  =
+  \frac{1}{\card{A}\card{\bar A}}
+  \sum_{i\in A}\sum_{j\in \bar A}
+  q(X_i\mid X_j)\,
+  \Pcond^V(A\setminus\{i\}).
+  \label{eq:pcond-recursion}
+\end{align}
+This dynamic program costs \(O(N^2 2^N)\), rather than summing explicitly over
+all possible generation orders.
+
+In the FastFeynmanDiagrammatics code this is exactly the role of the files
+\[
+  \texttt{compute\_seeds.hpp},\qquad
+  \texttt{compute\_conditional\_probabilities.hpp}.
+\]
+The seed matrix is
+\[
+  \texttt{seeds}_{ij}=q(X_i\mid X_j),
+\]
+and \(\Pcond^V(A)\) is computed recursively for all subsets \(A\).
+
+\subsection{Generalized parent choice}
+
+Uniform parent choice is not required.  One can replace it by weights
+\[
+  \pi(Y\mid B),\qquad
+  \pi(Y\mid B)\ge 0,\qquad
+  \sum_{Y\in B}\pi(Y\mid B)=1,
+\]
+so that
+\[
+  q(X\mid B)=\sum_{Y\in B}\pi(Y\mid B)q(X\mid Y).
+\]
+Then the recursion becomes
+\[
+  \Pgen(A\mid B)
+  =
+  \frac{1}{\card{A}}
+  \sum_{X\in A}
+  q(X\mid B)\,
+  \Pgen(A\setminus\{X\}\mid B\cup\{X\}).
+\]
+This may be useful if some vertices are more natural anchors than others.
+
+\subsection{Uniform-seed specialization}
+
+The simplest choice is the flat seed
+\[
+  q(X'\mid X)=1
+\]
+with respect to the normalized base measure \(\mu\).  Then
+\[
+  Q_{\bar S|S}(V_{\bar S}\mid V_S)=1,
+  \qquad
+  \Pcond^V(\bar S)=1.
+\]
+This is the specialization currently implemented in
+\[
+  \texttt{include/mcmcmc\_sampler.h}.
+\]
+It is useful as a correctness baseline because it should agree with plain
+uniform Monte Carlo.  It is not expected to be the optimal production
+proposal.
+
+\section{Fluxes and the local heat bath}
+
+Let \(\lambda_u>0\) be an order-dependent guiding parameter.  For a measured
+subset \(S\) with \(u=\card{S}\in\calU\), define the signed flux
+\[
+  \Phi_S(V)
+  =
+  \lambda_u\,
+  C_u(V_S)\,
+  Q_{\bar S|S}(V_{\bar S}\mid V_S).
+  \label{eq:signed-flux}
+\]
+For the pair-seed construction,
+\[
+  Q_{\bar S|S}(V_{\bar S}\mid V_S)
+  =
+  \Pcond^V(\bar S).
+\]
+
+The local absolute heat-bath normalization is
+\[
+  W(V)
+  =
+  \sum_{\substack{S\subseteq [N]\\ \card{S}\in\calU}}
+  \frac{|\Phi_S(V)|}{\binom{N}{\card{S}}}.
+  \label{eq:local-weight}
+\]
+The factor \(1/\binom{N}{\card{S}}\) is the same ``one binomial coefficient''
+factor used in the reference implementation.
+
+At a fixed envelope \(V\), the heat bath chooses a subset with probability
+\[
+  p(S\mid V)
+  =
+  \frac{|\Phi_S(V)|/\binom{N}{\card{S}}}{W(V)}.
+  \label{eq:subset-choice}
+\]
+After selecting \(S_\star\), the next envelope is produced by retaining
+\(V_{S_\star}\) and sampling a new complement from
+\[
+  Q_{\bar S_\star|S_\star}(\cdot\mid V_{S_\star}).
+\]
+
+The signed virtual time associated with a subset is
+\[
+  t_S(V)
+  =
+  \frac{\Phi_S(V)}{W(V)}.
+  \label{eq:times}
+\]
+The algorithm accumulates all \(t_S(V)\), not only the chosen subset.  This
+is the ``many-configuration'' part: one Markov step produces exact signed
+contributions from all visible subsets.
+
+\section{Detailed balance and rejection-free updates}
+
+The Markov chain on envelopes has stationary density proportional to \(W(V)\)
+with respect to \(\mu^N\):
+\[
+  \pi(V)=\frac{W(V)}{Z_W},\qquad
+  Z_W=\int_{\calX^N} W(V)\,\dd\mu^N(V).
+\]
+To see detailed balance, fix a retained subset \(S\).  Suppose \(V\) and
+\(V'\) share the same retained vertices \(V_S=V'_S\), while their complements
+are different.  The probability flux through this retained subset is
+proportional to
+\[
+  \pi(V)\,
+  p(S\mid V)\,
+  Q_{\bar S|S}(V'_{\bar S}\mid V_S).
+\]
+Using Eq.~\eqref{eq:subset-choice}, this is proportional to
+\[
+  W(V)\,
+  \frac{|\lambda_u C_u(V_S)Q_{\bar S|S}(V_{\bar S}\mid V_S)|}
+       {\binom{N}{u}W(V)}
+  Q_{\bar S|S}(V'_{\bar S}\mid V_S).
+\]
+Since \(V_S=V'_S\), this equals
+\[
+  \frac{|\lambda_u C_u(V_S)|}{\binom{N}{u}}\,
+  Q_{\bar S|S}(V_{\bar S}\mid V_S)\,
+  Q_{\bar S|S}(V'_{\bar S}\mid V_S),
+\]
+which is symmetric under \(V\leftrightarrow V'\).  Thus the heat-bath move is
+already balanced; there is no Metropolis rejection step.
+
+Therefore the Metropolis-style acceptance ratio is
+\[
+  A_{\mathrm{heatbath}}=1.
+\]
+Useful diagnostics are instead:
+\begin{itemize}[leftmargin=2em]
+  \item chosen order histogram \(N_u=\#\{t:\card{S_t}=u\}\),
+  \item retained fraction \(\card{S_t}/N\),
+  \item final \(\lambda_u\) values after warmup,
+  \item autocorrelation of the de-\(\lambda\) order signals.
+\end{itemize}
+
+\section{Estimators}
+
+Define the de-\(\lambda\) order signal
+\[
+  A_u(V)
+  =
+  \frac{1}{\binom{N}{u}}
+  \sum_{\substack{S\subseteq[N]\\\card{S}=u}}
+  \frac{t_S(V)}{\lambda_u}.
+  \label{eq:order-signal}
+\]
+Using Eqs.~\eqref{eq:signed-flux} and \eqref{eq:times},
+\[
+  W(V)A_u(V)
+  =
+  \frac{1}{\binom{N}{u}}
+  \sum_{\card{S}=u}
+  C_u(V_S)
+  Q_{\bar S|S}(V_{\bar S}\mid V_S).
+\]
+Integrating over the envelope gives
+\begin{align}
+  \int W(V)A_u(V)\,\dd\mu^N(V)
+  &=
+  \frac{1}{\binom{N}{u}}
+  \sum_{\card{S}=u}
+  \int C_u(V_S)
+  \left[
+  \int Q_{\bar S|S}(V_{\bar S}\mid V_S)\,\dd\mu(V_{\bar S})
+  \right]
+  \dd\mu(V_S)
+  \nonumber\\
+  &=
+  \frac{1}{\binom{N}{u}}
+  \sum_{\card{S}=u}
+  I_u
+  =
+  I_u.
+\end{align}
+Therefore
+\[
+  \E_{\pi}[A_u]=\frac{I_u}{Z_W}.
+\]
+The unknown normalization \(Z_W\) is common to all orders, so ratios are
+\[
+  \frac{I_u}{I_r}
+  =
+  \frac{\E_\pi[A_u]}{\E_\pi[A_r]}.
+\]
+
+Equivalently, if one accumulates the raw signal
+\[
+  M_u(V)
+  =
+  \frac{1}{\binom{N}{u}}
+  \sum_{\card{S}=u}t_S(V),
+\]
+then
+\[
+  \E_\pi[M_u]=\frac{\lambda_u I_u}{Z_W},
+\]
+and the ratio is
+\[
+  \frac{I_u}{I_r}
+  =
+  \frac{\E_\pi[M_u]/\lambda_u}{\E_\pi[M_r]/\lambda_r}.
+\]
+The current C++ code stores the de-\(\lambda\) signal \(A_u\).
+
+\section{Order normalization}
+
+Choose a reference order \(r\in\calU\).  The Monte Carlo directly gives
+\[
+  R_{u/r}
+  =
+  \frac{I_u}{I_r}.
+\]
+If \(I_r\) is known analytically or from a separate high-precision calculation,
+then
+\[
+  I_u=R_{u/r}I_r.
+\]
+In the current test,
+\[
+  r=2.
+\]
+This matches the idea of using a low order as a normalization sector.
+
+\section{The \texorpdfstring{$\lambda_u$}{lambda} parameters}
+
+The \(\lambda_u\)'s are positive guiding parameters.  They do not change the
+answer if divided out in the estimator.  They only change how frequently each
+order is selected and therefore affect variance and autocorrelation.
+
+Current implementation:
+\begin{enumerate}[leftmargin=2em]
+  \item Initialize from
+  \[
+    \texttt{MCMCMC\_LAMBDAS}.
+  \]
+  \item During warmup only, count the chosen orders in blocks.
+  \item Compare the measured chosen-order fraction \(\hat p_u\) with a target
+  \(p_u^\star\).  The current target is uniform over the measured orders:
+  \[
+    p_u^\star=\frac{1}{|\calU|}.
+  \]
+  \item Update
+  \[
+    \lambda_u
+    \leftarrow
+    \lambda_u
+    \exp\left[
+      \eta\log\left(\frac{p_u^\star}{\hat p_u}\right)
+    \right],
+  \]
+  where \(\eta=\texttt{MCMCMC\_LAMBDA\_ADAPT\_RATE}\).
+  \item Freeze the \(\lambda_u\)'s for production.  Warmup samples are
+  discarded.
+\end{enumerate}
+
+Other valid choices:
+\begin{itemize}[leftmargin=2em]
+  \item target one special normalization sector more often,
+  \item target the highest order more often,
+  \item use a Robbins--Monro decreasing adaptation rate,
+  \item precompute \(\lambda_u\) in a separate pilot run and keep them fixed,
+  \item use the median \(\lambda_u\) across many processes, as in the
+  FastFeynmanDiagrammatics production examples.
+\end{itemize}
+
+\section{Guiding functions versus physical observables}
+
+The direct version used in the current code sets the flux function equal to
+the signed physical CDet integrand:
+\[
+  \Phi_S(V)=\lambda_u C_u(V_S)Q_{\bar S|S}(V_{\bar S}\mid V_S).
+\]
+This is the simplest choice and is ideal for comparing to plain Monte Carlo.
+
+A more general production version can use a positive guiding function
+\[
+  G_u(V_S)\approx |C_u(V_S)|
+\]
+inside the absolute heat-bath flux, while measuring the physical observable by
+reweighting.  This is conceptually what the FastFeynmanDiagrammatics examples
+do with quantities such as \(\Sigma_a(S)\): the heat bath is driven by a
+positive proxy, and the desired signed/complex observable is accumulated as a
+ratio against that proxy.
+
+This is another major freedom.  The guiding function should be cheap enough
+to evaluate and close enough to the magnitude of the target observable to
+reduce variance.
+
+\section{Proposal design for the present CDet vertex}
+
+The current uniform proposal is
+\[
+  q(z'\mid z)=1,\qquad z,z'\in[0,1)^4.
+\]
+It is correct but not optimal.  A more physical proposal should factorize as
+\[
+  q(z'\mid z)
+  =
+  q_\tau(s'\mid s)\,
+  q_{\mathrm{space}}(r'_1,r'_2\mid r_1,r_2)\,
+  q_{\mathrm{rep}}(a'\mid a).
+\]
+
+\subsection{Time proposal}
+
+Since Green functions are strongly structured in time difference, use a
+periodic local proposal on \([0,\beta)\).  Examples:
+\[
+  q_\tau(\tau'\mid\tau)
+  \propto
+  \frac{1}{1+d_\beta(\tau',\tau)/\tau_0},
+\]
+or a Cauchy-like kernel
+\[
+  q_\tau(\tau'\mid\tau)
+  \propto
+  \frac{1}{1+\left(d_\beta(\tau',\tau)/\tau_0\right)^2},
+\]
+where \(d_\beta\) is the periodic distance on the imaginary-time circle.
+The FastFeynmanDiagrammatics finite-\(\beta\) examples use a logarithmic time
+proposal of this spirit, controlled by a scale parameter called
+\(\texttt{time\_scale}\).
+
+\subsection{Space proposal}
+
+For lattice sites use a torus distance \(d_L\) and a decaying probability
+mass
+\[
+  q_{\mathrm{lat}}(R'\mid R)
+  =
+  \frac{w(d_L(R',R))}{\sum_{R''}w(d_L(R'',R))}.
+\]
+A useful family is
+\[
+  w(d)=
+  \frac{1}{1+c_2(d/\ell)^2+c_4(d/\ell)^4}.
+\]
+This is close to the form used by the FastFeynmanDiagrammatics
+\(\texttt{lattice\_proposer}\), where the scale is controlled by
+\(\texttt{space\_scale}\).
+
+If the sampler still works in unit-cube variables \(r_1,r_2\), one can first
+choose a lattice site \(R'=(x',y')\), then draw
+\[
+  r'_1\sim \mathrm{Unif}\left[\frac{x'}{N_1},\frac{x'+1}{N_1}\right),
+  \qquad
+  r'_2\sim \mathrm{Unif}\left[\frac{y'}{N_2},\frac{y'+1}{N_2}\right).
+\]
+The density with respect to \(\dd r'_1\dd r'_2\) is then
+\[
+  N_1N_2\,q_{\mathrm{lat}}(R'\mid R).
+\]
+
+\subsection{Replica proposal}
+
+For two replicas, a simple kernel is
+\[
+  q_{\mathrm{rep}}(\alpha'\mid\alpha)
+  =
+  (1-p_{\mathrm{flip}})\1_{\alpha'=\alpha}
+  +
+  p_{\mathrm{flip}}\1_{\alpha'\ne\alpha}.
+\]
+Uniform replica proposal corresponds to \(p_{\mathrm{flip}}=1/2\).  A local
+proposal with smaller \(p_{\mathrm{flip}}\) may be better if same-replica
+correlations dominate.
+
+In unit-cube variables, after choosing \(\alpha'\in\{0,1\}\), draw
+\[
+  a'\sim \mathrm{Unif}\left[\frac{\alpha'}{2},\frac{\alpha'+1}{2}\right).
+\]
+The density with respect to \(\dd a'\) is
+\[
+  2\,q_{\mathrm{rep}}(\alpha'\mid\alpha).
+\]
+
+\subsection{Mixtures for ergodicity}
+
+To guarantee broad support and avoid overly local trapping, use a mixture
+\[
+  q_{\mathrm{mix}}(X'\mid X)
+  =
+  (1-\epsilon)q_{\mathrm{local}}(X'\mid X)
+  +
+  \epsilon q_{\mathrm{uniform}}(X'),
+\]
+with \(0<\epsilon\ll 1\).  The density used in \(\Pcond\) must be the same
+mixture density used to generate new vertices.
+
+\section{Algorithm summary}
+
+Given a current envelope \(V=(X_1,\ldots,X_N)\):
+
+\begin{enumerate}[leftmargin=2em]
+  \item For all relevant subsets \(S\subseteq[N]\), compute
+  \(C_{\card{S}}(V_S)\).
+  \item Compute \(Q_{\bar S|S}(V_{\bar S}\mid V_S)\).  In the pair-seed
+  version, build the seed matrix and compute all \(\Pcond^V(A)\) recursively.
+  In the current uniform version this factor is one.
+  \item Form signed fluxes
+  \[
+    \Phi_S(V)=\lambda_{\card{S}}C_{\card{S}}(V_S)Q_{\bar S|S}(V_{\bar S}\mid V_S).
+  \]
+  \item Form the local normalization
+  \[
+    W(V)=\sum_S \frac{|\Phi_S(V)|}{\binom{N}{\card{S}}}.
+  \]
+  \item Accumulate all signed times
+  \[
+    t_S(V)=\Phi_S(V)/W(V).
+  \]
+  \item Add the de-\(\lambda\) order signal
+  \[
+    A_u(V)=\binom{N}{u}^{-1}\sum_{\card{S}=u}t_S(V)/\lambda_u.
+  \]
+  \item Choose \(S_\star\) with probability
+  \[
+    \frac{|\Phi_{S_\star}(V)|/\binom{N}{\card{S_\star}}}{W(V)}.
+  \]
+  \item Keep \(V_{S_\star}\) and regenerate \(V_{\bar S_\star}\) from
+  \(Q_{\bar S_\star|S_\star}\).
+\end{enumerate}
+
+\section{Mapping to the current C++ implementation}
+
+The implementation supports both uniform and learned factorized-histogram
+seeds.  Only the uniform-seed special case has
+\[
+  Q_{\bar S|S}=1.
+\]
+For a histogram seed the conditional regeneration density is evaluated
+explicitly and retained in the flux.  A positive uniform mixture supplies
+full support; production sampling freezes the learned histogram.
+For speed, the code does not call the CDet integrand independently for every
+subset.  At one envelope \(V\), it builds the full \(N\times N\) up/down
+matrices once, computes all principal minors once, and runs an all-subset
+z-transform
+\[
+  \{c(S):S\subseteq[N]\}.
+\]
+The subset integrand is then read as
+\[
+  C_{\card{S}}(V_S)
+  =
+  \frac{(-2)^{\card{S}}}{\card{S}!\,N_1N_2}\,c(S).
+\]
+This is the CDet analog of the FastFeynmanDiagrammatics idea that exponentially
+many biased configurations can be obtained at little extra cost.
+Important code locations:
+\begin{itemize}[leftmargin=2em]
+  \item \(\texttt{include/cdet\_integrand\_evaluator.h}\): wraps the CDet
+  integrand evaluator.
+  \item \(\texttt{include/mcmcmc\_sampler.h}\): implements the envelope
+  heat-bath, the \(\lambda_u\) warmup, chain parallelism, and the plain MC
+  benchmark.
+  \item \(\texttt{src/main.cpp}\): loads parameters, builds Green-function
+  tables, runs MCMCMC, and prints ratios.
+  \item \(\texttt{params.txt}\): controls \(N\), measured order range,
+  \(\lambda_u\), warmup length, production length, and benchmark sample count.
+\end{itemize}
+
+\subsection{The \(\texttt{load\_data}\) stage}
+
+The name \(\texttt{load\_data}\) is slightly historical.  In this branch it
+does not read precomputed Green functions from disk.  It constructs the
+resident replica Green-function Chebyshev tables for the single parameter set
+specified by \(\texttt{params.txt}\), then stores those tables globally for all
+later CDet and MCMCMC evaluations.
+
+There are two ways this stage can be reached:
+\begin{enumerate}[leftmargin=2em]
+  \item \(\texttt{LOAD\_DATA\_WORKFLOW=resident}\), the default path used by
+  local runs.  The process builds every table at startup, optionally writes or
+  reads the lightweight calculator cache, and keeps the final Chebyshev
+  coefficients resident in memory.
+  \item \(\texttt{LOAD\_DATA\_WORKFLOW=load\_chunks}\), the HPC path.  Earlier
+  array jobs have already sampled the Chebyshev nodes, transformed site-pair
+  blocks to coefficients, written corner values, and produced a
+  \(\texttt{READY}\) marker.  The main run checks that the manifest matches the
+  current parameters, then either loads the coefficient chunks into resident
+  tables or opens them through the disk-backed LRU table backend.
+\end{enumerate}
+Both paths produce the same logical objects.  The only difference is whether
+the expensive node sampling and coefficient transform happen in this process or
+were split into chunked jobs before the MCMCMC run starts.
+
+The inputs that define the tables are
+\[
+  N_1,\; N_2,\; \beta,\; \mu,\; \alpha_{\uparrow},\; \alpha_{\downarrow},\;
+  \texttt{PBC},\; A,\; \texttt{CHEB\_NU},\; \texttt{CHEB\_NV}.
+\]
+Here the entanglement subregion \(A\) is selected by
+\(\texttt{SUBREGION\_MASK}\).  For \(\texttt{origin\_square}\), the radius is
+\(\texttt{SUBREGION\_SQUARE\_RADIUS}\); for all other masks the radius is
+ignored.  The spin-dependent one-body chemical potentials used in the free
+Green functions are
+\[
+  \mu_{\uparrow}=\mu-\alpha_{\uparrow},\qquad
+  \mu_{\downarrow}=\mu-\alpha_{\downarrow}.
+\]
+For each table kind the code builds a \(\texttt{ReplicaGreenCalculator}\).  This
+calculator constructs the square-lattice one-body Hamiltonian
+\[
+  h_{ij}=-\mu_\sigma\delta_{ij}
+  -t\,\delta_{\langle i,j\rangle},
+  \qquad t=1,
+\]
+with the requested boundary condition, diagonalizes it as \(h=V\Lambda V^T\),
+builds the subregion mask, and forms the two sector mixing matrices
+\[
+  S_m=V^T\Omega_m^{-1}V,
+  \qquad m=0,1.
+\]
+For the ordinary \(Z_1\) subtraction tables the mask is forced to
+\(A=\varnothing\), so \(S_m=\mathbf 1\); for the twisted tables the mask is the
+chosen entanglement subregion.  If
+\(\texttt{LOAD\_DATA\_CALCULATOR\_CACHE}\neq\texttt{off}\), this diagonalized
+calculator state may be reused, but the cache is checked against
+\(N_1,N_2,\beta,\mu_\sigma,\texttt{PBC}\), the mask, the radius, and the real
+type before it is accepted.
+
+There are two precision choices, and they play different roles:
+\begin{itemize}[leftmargin=2em]
+  \item \(\texttt{LOAD\_DATA\_REAL}\) chooses the real type used while building
+  the Chebyshev samples and solving the stable one-particle Green-function
+  systems.  Supported values are \(\texttt{MP}\), \(\texttt{double}\),
+  \(\texttt{long\_double}\), and \(\texttt{double\_double}\).
+  \item \(\texttt{VECTOR\_REAL}\) chooses the resident table type used during
+  Monte Carlo lookup.  Supported values are \(\texttt{double}\),
+  \(\texttt{long\_double}\), and \(\texttt{double\_double}\).
+\end{itemize}
+Thus the code may build a table in one precision and store it in another.  The
+conversion happens immediately after table construction.  If
+\(\texttt{GREEN\_TABLE\_DROP\_BITS}>0\), the resident mantissas are truncated
+after conversion; this is a controlled table-compression/noise experiment, not
+a change of the underlying theory.  The determinant and z-transform arithmetic
+then use \(\texttt{INTEGRAND\_REAL}\), which may differ from both construction
+and resident-table precision.
+
+The stable complex linear solves can also monitor the conditioning of the
+scaled middle matrices.  The control
+\(\texttt{LOAD\_DATA\_CONDITION\_CHECK}\) is \(\texttt{auto}\) by default:
+the solver estimates the reciprocal one-norm condition number \(r_{\rm cond}\)
+and writes a bounded number of warnings to \(\texttt{stderr}\) only when
+\[
+  r_{\rm cond}
+  \le
+  \texttt{LOAD\_DATA\_CONDITION\_RCOND\_WARN}.
+\]
+The default threshold is \(10^{-12}\).  Setting the mode to \(\texttt{off}\)
+removes the check, while \(\texttt{strict}\) turns the same event into an
+exception.  For the Green-function kernel solves the right hand side is
+diagonal, so the code recovers the one-norm of \(M^{-1}\) from the columns
+already solved for \(M^{-1}D_{\rm rhs}\); this adds only \(O(N_{\rm site}^2)\)
+work on top of the \(O(N_{\rm site}^3)\) solve.  In a LAPACK double-precision
+solve with a non-diagonal right hand side, the fallback estimator is LAPACK's
+\(\texttt{zgecon}\).
+
+For each spin, \(\texttt{load\_data}\) builds two kinds of tables:
+\begin{enumerate}[leftmargin=2em]
+  \item Twisted \(n=2\) replica tables with the chosen subregion \(A\):
+  \[
+    \texttt{g\_table\_up},\qquad \texttt{g\_table\_down}.
+  \]
+  These are the tables for the unnormalized twisted object
+  \(\widetilde Z_2[A]\).
+  \item Ordinary thermal tables with \(A=\varnothing\):
+  \[
+    \texttt{g\_table\_ordinary\_up},\qquad
+    \texttt{g\_table\_ordinary\_down}.
+  \]
+  These supply the \(Z_1\) subtraction.  The evaluator calls them with
+  replica count \(1\), and the normalized \(n=2\) integrand subtracts twice
+  the ordinary contribution.
+\end{enumerate}
+Thus the full resident set is
+\[
+  \texttt{twisted\_up},\quad
+  \texttt{twisted\_down},\quad
+  \texttt{ordinary\_up},\quad
+  \texttt{ordinary\_down}.
+\]
+When \(\alpha_\uparrow=\alpha_\downarrow\), the up and down Hamiltonians are
+identical, and the implementation reuses the same table object for the two
+spins.  This is only a storage optimization; it does not change the spin labels
+used later in the determinant.
+
+Each resident table is a \(\texttt{PiecewiseChebyshevTable}\).  It stores four
+arrays:
+\[
+  \texttt{upper\_coeffs},\quad
+  \texttt{lower\_coeffs},\quad
+  \texttt{upper\_corners},\quad
+  \texttt{lower\_corners}.
+\]
+The spatial layout is the full absolute-coordinate table over all replica
+indices and all site pairs \((R_1,R_2)\).  No translation-reduced table is used
+at this stage.
+
+The coefficient construction is:
+\begin{enumerate}[leftmargin=2em]
+  \item Build the tensor-product Chebyshev nodes
+  \(u_i=\cos((2i+1)\pi/(2N_u))\) and
+  \(v_j=\cos((2j+1)\pi/(2N_v))\), where
+  \(N_u=\texttt{CHEB\_NU}\) and \(N_v=\texttt{CHEB\_NV}\).
+  \item Map every \((u_i,v_j)\in[-1,1]^2\) to one of the two time triangles.
+  \item Evaluate the stable sector kernels
+  \(\bar G_m(\tau,\tau')\) for \(m=0,1\) on that branch.  The stable formulas
+  are the ones described in
+  \(\texttt{stable\_replica\_green\_kernel\_note.tex}\); they solve the scaled
+  linear systems without explicitly forming large
+  \(\exp(\pm\beta\Lambda)\) factors.
+  \item Transform the two sector matrices back to replica indices:
+  \[
+    \bar G_{\alpha\alpha}
+      =\frac{\bar G_0+\bar G_1}{2},\qquad
+    \bar G_{01}
+      =\frac{i(\bar G_0-\bar G_1)}{2},\qquad
+    \bar G_{10}
+      =-\frac{i(\bar G_0-\bar G_1)}{2}.
+  \]
+  \item Store one sampled value for each absolute replica/site pair, then apply
+  the two-dimensional Chebyshev cosine transform in the node indices.  The
+  result is stored in either \(\texttt{upper\_coeffs}\) or
+  \(\texttt{lower\_coeffs}\).
+\end{enumerate}
+For the ordinary \(Z_1\) tables, only the physical replica-\((0,0)\) block is
+needed.  The implementation therefore fills the \(N_1N_2\times N_1N_2\)
+ordinary block and leaves the rest of the full replica-layout array unused.
+
+The two coefficient arrays are the Chebyshev representations of the two time
+triangles:
+\[
+  \text{upper branch: }\tau>\tau',
+  \qquad
+  \text{lower branch: }\tau<\tau'.
+\]
+The square Chebyshev coordinates are mapped to the triangles by
+\[
+  \tau=\beta\frac{1+u}{2},\qquad
+  \tau'=\tau\frac{1+v}{2}
+  \quad\text{on the upper branch},
+\]
+and
+\[
+  \tau'=\beta\frac{1+u}{2},\qquad
+  \tau=\tau'\frac{1+v}{2}
+  \quad\text{on the lower branch}.
+\]
+This is exactly the same split as in the replica Green-function theory:
+the upper table represents
+\[
+  e^{-\tau h}A_m e^{\tau' h},
+\]
+while the lower table represents
+\[
+  e^{-\tau h}(A_m-\mathbf 1)e^{\tau' h}.
+\]
+The corner arrays hold the limiting values at the origin of each triangle.
+During lookup, \(\texttt{BRANCH\_EPSILON}\) decides when a requested point is
+close enough to that origin to use the stored corner value instead of forming a
+nearly singular Chebyshev coordinate.
+
+The lookup map is the inverse of the construction map.  If
+\(\tau_1>\tau_2\), the evaluator uses the upper table and sets
+\[
+  u=2\tau_1/\beta-1,\qquad v=2\tau_2/\tau_1-1.
+\]
+Otherwise it uses the lower table and sets
+\[
+  u=2\tau_2/\beta-1,\qquad v=2\tau_1/\tau_2-1.
+\]
+This includes the equal-time case: the CDet matrix builder selects
+\[
+  \texttt{use\_upper\_branch}
+  =
+  (i\neq j)\ \mathrm{and}\ (\tau_i>\tau_j).
+\]
+Therefore diagonal entries and exact time ties are lower-branch lookups.
+This is the correct convention for the equal-time object
+\(\bar G(i,\tau;i,\tau^+)\), because the second time is infinitesimally later:
+\[
+  \bar G^{(m)}(\tau,\tau^+)
+  =
+  e^{-\tau h}(A_m-\mathbf 1)e^{\tau h}.
+\]
+The upper branch would instead represent
+\(\bar G^{(m)}(\tau^+,\tau)\).  In the code this lower-side limit is encoded by
+passing the equal numerical coordinates
+\(\tau_1=\tau_2=\tau\) together with
+\(\texttt{use\_upper\_branch=false}\); it is not an average over the jump at
+equal time.
+
+After these four tables have been built, the integrand layer requires the
+resident type to match \(\texttt{VECTOR\_REAL}\).  A twisted evaluation reads
+\(\texttt{g\_table\_up/down}\); an ordinary evaluation reads
+\(\texttt{g\_table\_ordinary\_up/down}\).  The density actually used by the
+normalized \(n=2\) calculation is therefore
+\[
+  C_{\mathrm{norm}}(S)
+  =
+  C_{\mathrm{twisted}}^{(n=2)}(S)
+  -
+  2\,C_{\mathrm{ordinary}}^{(n=1)}(S),
+\]
+for every subset \(S\) seen by the envelope z-transform.
+
+For the default test
+\[
+  \calU=\{2,3,4\},\qquad N=5,\qquad r=2,
+\]
+the code computes all subsets of the five-vertex envelope whose cardinality is
+2, 3, or 4.  It prints:
+\begin{itemize}[leftmargin=2em]
+  \item final \(\lambda_u\)'s for each chain,
+  \item chosen order counts,
+  \item heat-bath acceptance, equal to one,
+  \item mean retained fraction,
+  \item de-\(\lambda\) means and ratios relative to the normalization order,
+  \item a plain uniform MC benchmark for comparison.
+\end{itemize}
+
+\section{Main free choices}
+
+The following choices are algorithmic knobs:
+\begin{enumerate}[leftmargin=2em]
+  \item Envelope order \(N\).
+  \item Measured order set \(\calU\).
+  \item Reference order \(r\).
+  \item Conditional generator \(Q_{\bar S|S}\), or equivalently pair seed
+  \(q(X'\mid X)\) plus parent selection rule.
+  \item Whether to use the physical signed integrand directly as the flux, or
+  a positive guiding function plus reweighting.
+  \item The order-guiding parameters \(\lambda_u\).
+  \item Warmup target fractions \(p_u^\star\) and adaptation rate.
+  \item Mixture fraction between local and uniform proposal.
+  \item Chain count and internal integrand thread count.
+  \item Numerical precision for load-data and integrand evaluation.
+\end{enumerate}
+
+Only item 4 and item 5 change the variance structure in a deep way.  The
+other knobs mainly control balancing, autocorrelation, and computational cost.
+
+\end{document}

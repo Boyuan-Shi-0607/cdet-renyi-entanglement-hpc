@@ -1,0 +1,963 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{bm}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\newcommand{\ii}{\mathrm{i}}
+\newcommand{\e}{\mathrm{e}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\1}{\mathbb{1}}
+\newcommand{\bI}{\mathbf{I}}
+\newcommand{\bh}{\mathbf{h}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\cond}{\operatorname{cond}}
+\newcommand{\abs}[1]{\left|#1\right|}
+\newcommand{\br}[1]{\left(#1\right)}
+\newcommand{\sq}[1]{\left[#1\right]}
+\newcommand{\set}[1]{\left\{#1\right\}}
+
+\title{Stable Numerical Evaluation of the Free Graded-Replica Green Kernel}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Purpose}
+
+This note only discusses the numerical evaluation of the free
+graded-replica Green function.  The path-integral construction, the graded
+swap, and the perturbation theory are not repeated here.  The goal is to
+start from the exact matrix formula for the free sector Green function and
+rewrite it so that the large factors in
+\(\exp(\pm \beta \bh)\) are never formed as large floating-point numbers.
+
+The issue is the following.  The one-particle hopping Hamiltonian \(\bh\)
+can have negative eigenvalues.  Then \(\e^{-\beta \bh}\) may contain large
+eigenvalues.  In the exact Green function these large factors are cancelled
+by the inverse matrix
+\[
+    \sq{\bI+\Omega_m^{-1}\e^{-\beta\bh}}^{-1},
+\]
+but a direct implementation forms the large matrix first and relies on the
+linear algebra to cancel it later.  This is numerically fragile.  The stable
+form below performs the cancellation algebraically before exponentiation.
+
+\section{Original Sector Formula}
+
+Let \(A\) be the entanglement subregion and \(B\) its complement.  On the
+one-particle Hilbert space define the projectors
+\[
+    P_A+P_B=\bI,
+    \qquad
+    P_A P_B=0.
+\]
+For \(n\) replicas the graded momenta are
+\[
+    q_m=\frac{(2m+1)\pi}{n},
+    \qquad
+    m=0,\ldots,n-1.
+\]
+The sector gluing matrix is
+\[
+    \Omega_m = P_B-\e^{\ii q_m}P_A.
+\]
+Equivalently,
+\[
+    \Omega_m^{-1}=P_B-\e^{-\ii q_m}P_A.
+\]
+Both \(\Omega_m\) and \(\Omega_m^{-1}\) are unitary, because they are
+diagonal phase matrices in the real-space \(A/B\) decomposition.
+
+The free sector Green function satisfies
+\[
+    \br{\partial_\tau+\bh}\bar G_m(\tau,\tau')
+    =
+    \delta(\tau-\tau')\bI
+\]
+with sector boundary condition
+\[
+    \bar G_m(\beta^-,\tau')
+    =
+    -\Omega_m \bar G_m(0^+,\tau').
+\]
+Solving the equation of motion gives the exact piecewise formula
+\[
+    \bar G_m(\tau,\tau')
+    =
+    \begin{cases}
+    \e^{-\tau\bh} A_m \e^{\tau'\bh},
+    & \tau>\tau',
+    \\[4pt]
+    \e^{-\tau\bh} \br{A_m-\bI}\e^{\tau'\bh},
+    & \tau<\tau',
+    \end{cases}
+\]
+where
+\[
+    A_m =
+    \sq{\bI+\Omega_m^{-1}\e^{-\beta\bh}}^{-1}.
+\]
+
+This formula is mathematically correct, but it is not the best numerical
+formula when \(\beta \abs{\epsilon_a}\) is large.
+
+\section{Diagonalizing the Hopping Hamiltonian}
+
+Assume that \(\bh\) is real symmetric.  Write
+\[
+    \bh = V\Lambda V^T,
+    \qquad
+    V^T V=\bI,
+    \qquad
+    \Lambda_{ab}=\epsilon_a\delta_{ab}.
+\]
+Define the gluing matrix in the eigenbasis of \(\bh\):
+\[
+    S_m = V^T\Omega_m^{-1}V.
+\]
+Since \(V\) is real orthogonal and \(\Omega_m^{-1}\) is unitary,
+\[
+    S_m^\dagger S_m=\bI.
+\]
+Thus \(S_m\) is unitary.  In particular,
+\[
+    \abs{(S_m)_{ab}}\le 1.
+\]
+
+Let
+\[
+    D = \e^{\beta\Lambda}
+    =
+    \diag\br{\e^{\beta\epsilon_1},\ldots,\e^{\beta\epsilon_N}},
+    \qquad
+    D^{-1}=\e^{-\beta\Lambda}.
+\]
+In the eigenbasis,
+\[
+    \mathcal A_m
+    \equiv
+    V^T A_m V
+    =
+    \sq{\bI+S_mD^{-1}}^{-1}.
+\]
+Now factor \(D^{-1}\) from the right:
+\[
+    \bI+S_mD^{-1}
+    =
+    (D+S_m)D^{-1}.
+\]
+Therefore
+\[
+    \mathcal A_m
+    =
+    D(D+S_m)^{-1}.
+\]
+No commutativity between \(D\) and \(S_m\) is assumed.  The order in the
+last formula is essential.
+
+\section{Eigenbasis Kernels}
+
+Introduce dimensionless times
+\[
+    u=\frac{\tau}{\beta},
+    \qquad
+    v=\frac{\tau'}{\beta},
+    \qquad
+    0\le u,v\le 1.
+\]
+The site-basis Green function is reconstructed from an eigenbasis kernel:
+\[
+    \bar G_m(\tau,\tau') = V K_m(\tau,\tau') V^T.
+\]
+
+\subsection{Upper branch}
+
+For \(\tau>\tau'\), equivalently \(u>v\),
+\[
+    K_m^>(u,v)
+    =
+    D^{-u}\mathcal A_m D^v.
+\]
+Using \(\mathcal A_m=D(D+S_m)^{-1}\), this becomes
+\[
+    \boxed{
+    K_m^>(u,v)
+    =
+    D^{1-u}(D+S_m)^{-1}D^v.
+    }
+\]
+The raw matrix element form is
+\[
+    \br{K_m^>}_{ab}
+    =
+    \e^{(1-u)\beta\epsilon_a}
+    \sq{(D+S_m)^{-1}}_{ab}
+    \e^{v\beta\epsilon_b}.
+\]
+This already shows the desired cancellation structure.  The exponential
+from \(D\), which came from inverting the original \(D^{-1}\), has been
+combined with the external factors \(\e^{-\tau\Lambda}\) and
+\(\e^{\tau'\Lambda}\).
+
+\subsection{Lower branch}
+
+For \(\tau<\tau'\), equivalently \(u<v\),
+\[
+    K_m^<(u,v)
+    =
+    D^{-u}\br{\mathcal A_m-\bI}D^v.
+\]
+Use
+\[
+    \mathcal A_m-\bI
+    =
+    -\sq{\bI+D S_m^{-1}}^{-1}.
+\]
+One way to see this without assuming any commutativity is
+\[
+    \mathcal A_m
+    =
+    D(D+S_m)^{-1},
+\]
+so
+\[
+    \mathcal A_m-\bI
+    =
+    D(D+S_m)^{-1}-(D+S_m)(D+S_m)^{-1}
+    =
+    -S_m(D+S_m)^{-1}.
+\]
+On the other hand,
+\[
+    \bI+D S_m^{-1}
+    =
+    (D+S_m)S_m^{-1},
+\]
+and therefore
+\[
+    \sq{\bI+D S_m^{-1}}^{-1}
+    =
+    S_m(D+S_m)^{-1}.
+\]
+Since
+\[
+    \bI+D S_m^{-1}
+    =
+    D\br{D^{-1}+S_m^{-1}},
+\]
+define
+\[
+    H = D^{-1}=\e^{-\beta\Lambda}.
+\]
+Then
+\[
+    \boxed{
+    K_m^<(u,v)
+    =
+    -H^u\br{H+S_m^{-1}}^{-1}H^{1-v}.
+    }
+\]
+Again, no commutativity is assumed.  Also,
+\[
+    S_m^{-1}=S_m^\dagger,
+\]
+so the lower branch does not require a separate matrix inverse for \(S_m\).
+
+\section{Scalar Check: \(S_m=\bI\)}
+
+If there is no mode mixing, \(S_m=\bI\), the upper branch reduces to
+\[
+    K_a^>(u,v)
+    =
+    \frac{D_a^{1-u+v}}{1+D_a}
+    =
+    \frac{\e^{(1-u+v)x_a}}{1+\e^{x_a}},
+    \qquad
+    x_a=\beta\epsilon_a,
+\]
+with \(0<1-u+v<1\).  This is a scalar Fermi kernel.  It is bounded:
+\[
+    x_a\gg 1:
+    \quad
+    K_a^>\sim \e^{-(u-v)x_a},
+    \qquad
+    x_a\ll -1:
+    \quad
+    K_a^>\sim \e^{(1-u+v)x_a}.
+\]
+Both asymptotic forms are small or \(O(1)\), never exponentially large.
+
+The lower branch becomes
+\[
+    K_a^<(u,v)
+    =
+    -\frac{H_a^{u+1-v}}{1+H_a}
+    =
+    -\frac{\e^{(u+1-v)y_a}}{1+\e^{y_a}},
+    \qquad
+    y_a=-x_a,
+\]
+with \(0<u+1-v<1\).  It is bounded for the same reason.
+
+The matrix formulas below are the noncommuting version of this scalar
+``manually cancel the large exponential'' evaluation.
+
+\subsection{Relation to the usual scalar cutoff trick}
+
+For a scalar Fermi factor one often evaluates
+\[
+    f_r(x)=\frac{\e^{rx}}{1+\e^x},
+    \qquad
+    0\le r\le 1,
+\]
+by splitting into large-positive and large-negative regimes:
+\[
+    x\gg 1:
+    \quad
+    f_r(x)
+    =
+    \frac{\e^{(r-1)x}}{1+\e^{-x}}
+    \simeq
+    \e^{(r-1)x},
+\]
+\[
+    x\ll -1:
+    \quad
+    f_r(x)
+    =
+    \frac{\e^{rx}}{1+\e^x}
+    \simeq
+    \e^{rx}.
+\]
+This is stable because the large exponential has been cancelled before the
+number is evaluated.  A practical implementation may introduce a cutoff
+\(T\): for \(x>T\) use the first asymptotic form, for \(x<-T\) use the
+second, and otherwise use the original expression.
+
+The diagonal scaling used in this note is the exact no-cutoff version of the
+same idea.  Define
+\[
+    c=\max(0,x).
+\]
+Then
+\[
+    1+\e^x
+    =
+    \e^c\br{\e^{-c}+\e^{x-c}},
+\]
+and hence
+\[
+    f_r(x)
+    =
+    \frac{\e^{rx-c}}{\e^{-c}+\e^{x-c}}.
+\]
+All exponents in this expression are non-positive.  If \(x\ge0\), then
+\[
+    f_r(x)
+    =
+    \frac{\e^{(r-1)x}}{1+\e^{-x}},
+\]
+while if \(x<0\), then
+\[
+    f_r(x)
+    =
+    \frac{\e^{rx}}{1+\e^x}.
+\]
+Thus the scaling reproduces the usual stable scalar branches exactly.  The
+cutoff method is recovered only as a further approximation when
+\(\e^{-x}\) or \(\e^x\) is below the desired tolerance.  The matrix scaling
+below keeps the exact scaled denominator instead of dropping the small term.
+
+\subsection{Scalar limit of the matrix scaling}
+
+When \(S_m=\bI\), the upper scaled middle matrix is diagonal:
+\[
+    M_a^+
+    =
+    \e^{-\theta_+c_a^+}\e^{-(1-\theta_+)c_a^+}
+    +
+    \e^{x_a-c_a^+}
+    =
+    \e^{-c_a^+}+\e^{x_a-c_a^+}.
+\]
+It is independent of \(\theta_+\).  The left and right factors are
+\[
+    L_a^+
+    =
+    \e^{(1-u)x_a-(1-\theta_+)c_a^+},
+    \qquad
+    R_a^+
+    =
+    \e^{vx_a-\theta_+c_a^+}.
+\]
+Therefore
+\[
+    L_a^+(M_a^+)^{-1}R_a^+
+    =
+    \frac{
+    \e^{(1-u+v)x_a-c_a^+}
+    }{
+    \e^{-c_a^+}+\e^{x_a-c_a^+}
+    }
+    =
+    \frac{\e^{(1-u+v)x_a}}{1+\e^{x_a}}.
+\]
+This is exactly the scalar upper Fermi kernel.
+
+The lower branch is the same statement with
+\[
+    y_a=-x_a,
+    \qquad
+    c_a^-=\max(0,y_a).
+\]
+When \(S_m=\bI\),
+\[
+    M_a^-=\e^{-c_a^-}+\e^{y_a-c_a^-},
+\]
+and
+\[
+    -L_a^-(M_a^-)^{-1}R_a^-
+    =
+    -
+    \frac{\e^{(u+1-v)y_a}}{1+\e^{y_a}}.
+\]
+Multiplying numerator and denominator by \(\e^{x_a}\) gives the equivalent
+form
+\[
+    -
+    \frac{\e^{(v-u)x_a}}{1+\e^{x_a}},
+\]
+which is the scalar lower Fermi kernel.  Thus in the commuting scalar limit
+the scaled matrix formula is not merely analogous to the cutoff trick; it is
+the exact stable logistic/Fermi evaluation.
+
+\section{Stable Diagonal Scaling: Upper Branch}
+
+The upper branch is
+\[
+    K_m^> = D^{1-u}(D+S_m)^{-1}D^v,
+    \qquad
+    u>v.
+\]
+Let
+\[
+    x_a=\beta\epsilon_a,
+    \qquad
+    c_a^+=\max(0,x_a),
+    \qquad
+    C_+ = \diag\br{\e^{c_a^+}}.
+\]
+Thus
+\[
+    (C_+)_{aa}=\max(1,D_a).
+\]
+Choose any
+\[
+    \theta_+\in[v,u].
+\]
+Define the scaled middle matrix
+\[
+    \boxed{
+    M_m^+
+    =
+    C_+^{-\theta_+}
+    \br{D+S_m}
+    C_+^{-(1-\theta_+)}.
+    }
+\]
+Then
+\[
+    D+S_m
+    =
+    C_+^{\theta_+} M_m^+ C_+^{1-\theta_+},
+\]
+so
+\[
+    (D+S_m)^{-1}
+    =
+    C_+^{-(1-\theta_+)}
+    (M_m^+)^{-1}
+    C_+^{-\theta_+}.
+\]
+Therefore
+\[
+    \boxed{
+    K_m^>
+    =
+    L_+ (M_m^+)^{-1} R_+,
+    }
+\]
+with diagonal prefactors
+\[
+    L_+
+    =
+    D^{1-u}C_+^{-(1-\theta_+)},
+    \qquad
+    R_+
+    =
+    C_+^{-\theta_+}D^v.
+\]
+
+\subsection{Elementwise form used in code}
+
+The stable implementation should never form \(D\) or \(C_+\) as large
+intermediate numbers.  It should work with exponents:
+\[
+    \ell_a^+
+    =
+    (1-u)x_a-(1-\theta_+)c_a^+,
+\]
+\[
+    r_b^+
+    =
+    vx_b-\theta_+ c_b^+.
+\]
+Then
+\[
+    (L_+)_{aa}=\e^{\ell_a^+},
+    \qquad
+    (R_+)_{bb}=\e^{r_b^+}.
+\]
+The choice \(\theta_+\in[v,u]\) makes both exponents non-positive.
+Indeed, if \(x_a\ge 0\), then \(c_a^+=x_a\) and
+\[
+    \ell_a^+=(\theta_+-u)x_a\le 0.
+\]
+If \(x_a<0\), then \(c_a^+=0\) and
+\[
+    \ell_a^+=(1-u)x_a\le 0.
+\]
+Similarly, if \(x_b\ge 0\),
+\[
+    r_b^+=(v-\theta_+)x_b\le 0,
+\]
+while if \(x_b<0\),
+\[
+    r_b^+=vx_b\le 0.
+\]
+Thus \(0<(L_+)_{aa}\le 1\) and \(0<(R_+)_{bb}\le 1\).
+
+The entries of \(M_m^+\) are
+\[
+    \boxed{
+    (M_m^+)_{ab}
+    =
+    \e^{-\theta_+ c_a^+}
+    (S_m)_{ab}
+    \e^{-(1-\theta_+)c_b^+}
+    +
+    \delta_{ab}\e^{x_a-c_a^+}.
+    }
+\]
+Every exponent here is non-positive:
+\[
+    -\theta_+c_a^+\le 0,
+    \qquad
+    -(1-\theta_+)c_b^+\le 0,
+    \qquad
+    x_a-c_a^+\le 0.
+\]
+Hence no overflow can occur in the construction of \(M_m^+\), \(L_+\), or
+\(R_+\).
+
+\subsection{Why the upper middle matrix is bounded}
+
+Because \(S_m\) is unitary,
+\[
+    \abs{(S_m)_{ab}}\le 1.
+\]
+The mixing term satisfies
+\[
+    \abs{
+    \e^{-\theta_+ c_a^+}
+    (S_m)_{ab}
+    \e^{-(1-\theta_+)c_b^+}
+    }
+    \le 1.
+\]
+The diagonal term satisfies
+\[
+    0<\e^{x_a-c_a^+}\le 1.
+\]
+Thus each entry obeys the simple bound
+\[
+    \abs{(M_m^+)_{ab}}\le 1+\delta_{ab}.
+\]
+The middle matrix itself contains no exponentially large entries.
+
+The inverse \((M_m^+)^{-1}\) can still be large if \(M_m^+\) is nearly
+singular.  That is a genuine conditioning or physical zero-mode issue, not
+an artificial overflow caused by \(\e^{\beta\abs{\epsilon}}\).
+
+\section{Stable Diagonal Scaling: Lower Branch}
+
+The lower branch is
+\[
+    K_m^<
+    =
+    -H^u(H+S_m^{-1})^{-1}H^{1-v},
+    \qquad
+    H=D^{-1},
+    \qquad
+    u<v.
+\]
+Let
+\[
+    y_a=-x_a=-\beta\epsilon_a,
+    \qquad
+    c_a^-=\max(0,y_a),
+    \qquad
+    C_-=\diag\br{\e^{c_a^-}}.
+\]
+Thus
+\[
+    (C_-)_{aa}=\max(1,H_a).
+\]
+Choose any
+\[
+    \theta_-\in[1-v,1-u].
+\]
+Define
+\[
+    \boxed{
+    M_m^-
+    =
+    C_-^{-\theta_-}
+    \br{H+S_m^{-1}}
+    C_-^{-(1-\theta_-)}.
+    }
+\]
+Then
+\[
+    \boxed{
+    K_m^<
+    =
+    -L_-(M_m^-)^{-1}R_-,
+    }
+\]
+with
+\[
+    L_-
+    =
+    H^u C_-^{-(1-\theta_-)},
+    \qquad
+    R_-
+    =
+    C_-^{-\theta_-}H^{1-v}.
+\]
+
+\subsection{Elementwise form used in code}
+
+Again, use only combined exponents:
+\[
+    \ell_a^-
+    =
+    uy_a-(1-\theta_-)c_a^-,
+\]
+\[
+    r_b^-
+    =
+    (1-v)y_b-\theta_- c_b^-.
+\]
+Then
+\[
+    (L_-)_{aa}=\e^{\ell_a^-},
+    \qquad
+    (R_-)_{bb}=\e^{r_b^-}.
+\]
+The interval \(\theta_-\in[1-v,1-u]\) makes these exponents non-positive.
+If \(y_a\ge 0\), then \(c_a^-=y_a\) and
+\[
+    \ell_a^-=(u+\theta_- -1)y_a\le 0,
+\]
+because \(\theta_-\le 1-u\).  If \(y_a<0\), then \(c_a^-=0\) and
+\[
+    \ell_a^-=uy_a\le 0.
+\]
+For the right factor, if \(y_b\ge 0\),
+\[
+    r_b^-=(1-v-\theta_-)y_b\le 0,
+\]
+because \(\theta_-\ge 1-v\).  If \(y_b<0\), then
+\[
+    r_b^-=(1-v)y_b\le 0.
+\]
+Thus \(0<(L_-)_{aa}\le 1\) and \(0<(R_-)_{bb}\le 1\).
+
+The entries of \(M_m^-\) are
+\[
+    \boxed{
+    (M_m^-)_{ab}
+    =
+    \e^{-\theta_- c_a^-}
+    (S_m^{-1})_{ab}
+    \e^{-(1-\theta_-)c_b^-}
+    +
+    \delta_{ab}\e^{y_a-c_a^-}.
+    }
+\]
+Since \(S_m^{-1}=S_m^\dagger\) is unitary,
+\[
+    \abs{(S_m^{-1})_{ab}}\le 1.
+\]
+Also all exponents are non-positive:
+\[
+    -\theta_-c_a^-\le 0,
+    \qquad
+    -(1-\theta_-)c_b^-\le 0,
+    \qquad
+    y_a-c_a^-\le 0.
+\]
+Therefore
+\[
+    \abs{(M_m^-)_{ab}}\le 1+\delta_{ab}.
+\]
+The lower middle matrix also contains no exponentially large entries.
+
+\section{Choice of the Splitting Parameter}
+
+The parameters \(\theta_+\) and \(\theta_-\) are not physical.  They only
+choose how the diagonal scaling is divided between the left and right side
+of the linear solve.  A balanced default is
+\[
+    \theta_+ = \frac{u+v}{2},
+    \qquad
+    \tau>\tau',
+\]
+and
+\[
+    \theta_- = \frac{(1-v)+(1-u)}{2}
+    =
+    1-\frac{u+v}{2},
+    \qquad
+    \tau<\tau'.
+\]
+These choices lie in the required intervals:
+\[
+    \theta_+\in[v,u],
+    \qquad
+    \theta_-\in[1-v,1-u].
+\]
+They also distribute the small factors symmetrically around the middle
+matrix, which usually improves conditioning of the scaled linear solve.
+
+\section{Practical Numerical Algorithm}
+
+The following is the intended numerical workflow in the eigenbasis.
+
+\subsection*{Precomputation for each spin and sector}
+
+\begin{enumerate}[leftmargin=2em]
+    \item Diagonalize the real symmetric hopping matrix:
+    \[
+        \bh=V\Lambda V^T.
+    \]
+    Store the eigenvalues \(\epsilon_a\) and eigenvectors \(V_{ia}\).
+
+    \item Build the site-basis diagonal phases of \(\Omega_m^{-1}\):
+    \[
+        \eta_i^{(m)}
+        =
+        \begin{cases}
+        1, & i\in B,\\
+        -\e^{-\ii q_m}, & i\in A.
+        \end{cases}
+    \]
+    If the code uses the conjugate Fourier convention, the sign in the
+    phase should follow the convention used in the original \(B_m\).
+    The numerical method below only requires that the same
+    \(\Omega_m^{-1}\) used in \(B_m=\bI+\Omega_m^{-1}\e^{-\beta\bh}\)
+    is used here.
+
+    \item Build
+    \[
+        (S_m)_{ab}
+        =
+        \sum_i V_{ia}\eta_i^{(m)}V_{ib}.
+    \]
+    This is a dense unitary matrix, but it contains no large or small
+    exponentials.
+
+    \item Store
+    \[
+        x_a=\beta\epsilon_a.
+    \]
+    Do not store \(D_a=\e^{x_a}\) as the primary object.
+\end{enumerate}
+
+\subsection*{Evaluation for \(\tau>\tau'\)}
+
+\begin{enumerate}[leftmargin=2em]
+    \item Compute
+    \[
+        u=\tau/\beta,
+        \qquad
+        v=\tau'/\beta,
+        \qquad
+        \theta_+=(u+v)/2.
+    \]
+
+    \item For each eigenmode \(a\), compute
+    \[
+        c_a^+=\max(0,x_a).
+    \]
+
+    \item Build the scaled middle matrix
+    \[
+        (M_m^+)_{ab}
+        =
+        \e^{-\theta_+ c_a^+}
+        (S_m)_{ab}
+        \e^{-(1-\theta_+)c_b^+}
+        +
+        \delta_{ab}\e^{x_a-c_a^+}.
+    \]
+
+    \item Build the diagonal left and right factors from combined exponents:
+    \[
+        (L_+)_{aa}
+        =
+        \exp\sq{(1-u)x_a-(1-\theta_+)c_a^+},
+    \]
+    \[
+        (R_+)_{aa}
+        =
+        \exp\sq{vx_a-\theta_+c_a^+}.
+    \]
+
+    \item Solve the linear system
+    \[
+        M_m^+Y=R_+
+    \]
+    for \(Y\).  Do not explicitly form \((M_m^+)^{-1}\) unless this is only
+    for diagnostic testing.
+
+    \item Form
+    \[
+        K_m^> = L_+Y.
+    \]
+
+    \item Transform back to site basis:
+    \[
+        \bar G_m^>(\tau,\tau')=VK_m^>V^T.
+    \]
+\end{enumerate}
+
+\subsection*{Evaluation for \(\tau<\tau'\)}
+
+\begin{enumerate}[leftmargin=2em]
+    \item Compute
+    \[
+        u=\tau/\beta,
+        \qquad
+        v=\tau'/\beta,
+        \qquad
+        \theta_-=1-\frac{u+v}{2}.
+    \]
+
+    \item For each eigenmode \(a\), compute
+    \[
+        y_a=-x_a,
+        \qquad
+        c_a^-=\max(0,y_a).
+    \]
+
+    \item Use
+    \[
+        S_m^{-1}=S_m^\dagger.
+    \]
+    Build
+    \[
+        (M_m^-)_{ab}
+        =
+        \e^{-\theta_- c_a^-}
+        (S_m^{-1})_{ab}
+        \e^{-(1-\theta_-)c_b^-}
+        +
+        \delta_{ab}\e^{y_a-c_a^-}.
+    \]
+
+    \item Build
+    \[
+        (L_-)_{aa}
+        =
+        \exp\sq{uy_a-(1-\theta_-)c_a^-},
+    \]
+    \[
+        (R_-)_{aa}
+        =
+        \exp\sq{(1-v)y_a-\theta_-c_a^-}.
+    \]
+
+    \item Solve
+    \[
+        M_m^-Y=R_-.
+    \]
+
+    \item Form
+    \[
+        K_m^< = -L_-Y.
+    \]
+
+    \item Transform back:
+    \[
+        \bar G_m^<(\tau,\tau')=VK_m^<V^T.
+    \]
+\end{enumerate}
+
+\section{What This Stabilizes and What It Does Not}
+
+The diagonal scaling removes artificial large numbers generated by
+\(\e^{\pm\beta\Lambda}\).  In both branches:
+\begin{itemize}[leftmargin=2em]
+    \item the left prefactors are exponentials of non-positive numbers;
+    \item the right prefactors are exponentials of non-positive numbers;
+    \item the diagonal term in the middle matrix is at most \(1\);
+    \item the mixing term is a unitary matrix element multiplied by two
+    factors at most \(1\).
+\end{itemize}
+Thus no entry in the scaled construction contains a large exponential.
+
+The method does not remove true singularities.  If \(D+S_m\) or
+\(H+S_m^{-1}\) is close to singular, then the Green function itself is
+ill-conditioned in that sector.  The scaled matrices \(M_m^\pm\) will then
+also be ill-conditioned.  This is the correct numerical signal of a physical
+or algebraic near-zero mode, not a failure of the scaling.
+
+\section{Relation to the Current Direct Formula}
+
+The direct implementation usually performs the following steps:
+\[
+    U(\beta)=\e^{-\beta\bh},
+    \qquad
+    B_m=\bI+\Omega_m^{-1}U(\beta),
+    \qquad
+    A_m=B_m^{-1},
+\]
+and later evaluates
+\[
+    \e^{-\tau\bh}A_m\e^{\tau'\bh}
+    \quad\text{or}\quad
+    \e^{-\tau\bh}(A_m-\bI)\e^{\tau'\bh}.
+\]
+This is correct, but it allows the large and small exponentials to appear
+before cancellation.
+
+The stable kernel method instead works directly with
+\[
+    K_m^> =
+    L_+(M_m^+)^{-1}R_+,
+    \qquad
+    K_m^< =
+    -L_-(M_m^-)^{-1}R_-,
+\]
+where all exponentials in \(L_\pm\), \(R_\pm\), and \(M_m^\pm\) have
+non-positive exponents.  It is exactly equivalent to the original Green
+function formula, up to ordinary roundoff and the conditioning of the scaled
+linear solve.
+
+\end{document}

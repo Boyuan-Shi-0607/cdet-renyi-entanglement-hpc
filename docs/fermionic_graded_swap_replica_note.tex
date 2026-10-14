@@ -1,0 +1,1279 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm,mathtools,bm}
+\usepackage{mathrsfs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{dsfont}
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+\setlength{\parskip}{0.4em}
+\setlength{\parindent}{0pt}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{remark}{Remark}
+\newtheorem{definition}{Definition}
+
+\newcommand{\Tr}{\operatorname{Tr}}
+\newcommand{\e}{\mathrm{e}}
+\newcommand{\ii}{\mathrm{i}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\1}{\mathds{1}}
+\newcommand{\HA}{\mathcal{H}_A}
+\newcommand{\HB}{\mathcal{H}_B}
+\newcommand{\HH}{\mathcal{H}}
+\newcommand{\cD}{\mathcal{D}}
+\newcommand{\up}{\uparrow}
+\newcommand{\dn}{\downarrow}
+\newcommand{\bh}{\bm{h}}
+\newcommand{\bI}{\bm{I}}
+\newcommand{\br}[1]{\left(#1\right)}
+\newcommand{\sq}[1]{\left[#1\right]}
+\newcommand{\cb}[1]{\left\{#1\right\}}
+
+\title{From the Fermionic Graded-Swap Representation of $\Tr_A(\rho_A^n)$\\
+to the Free Replica Green's Function, Perturbation Theory,\\
+and the Shifted Expansion}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present a self-contained derivation of the fermionic replica construction
+for the $n$-th Renyi entropy of a spatial subregion $A$, starting from
+\[
+Z_n[A]\equiv \Tr_A(\rho_A^n),
+\qquad
+\rho=\frac{\e^{-\beta H}}{Z_1},
+\qquad
+Z_1=\Tr_{\HH}\e^{-\beta H}.
+\]
+The key correction relative to the naive bosonic-looking construction is that
+the operator inserted on subsystem $A$ is the \emph{graded} cyclic
+permutation, not the plain cyclic permutation. This graded structure changes
+the temporal gluing on $A$, shifts the replica-sector phases by a half-step,
+and therefore changes the free replica Green's function, the free replica
+partition function, and the perturbative coefficients.
+
+We derive the coherent-state path-integral representation with the corrected
+mixed temporal boundary conditions, introduce the graded replica shift matrix,
+and diagonalize it by a replica Fourier transform with momenta
+\[
+q_m=\frac{(2m+1)\pi}{n}, \qquad m=0,\dots,n-1.
+\]
+In a convention without an extra minus sign in front of the time-ordering
+symbol,
+\[
+\bar G \equiv \langle T_\tau c c^\dagger\rangle_0,
+\]
+the equation of motion carries a positive delta function. We derive the exact
+piecewise free Green's function in one graded replica sector, discuss the loss
+of imaginary-time translation invariance, and analyze the singularity
+criterion. We then derive the determinant perturbation expansion and the
+shifted expansion used in connected-determinant / diagrammatic Monte Carlo
+implementations.
+
+We also separate clearly the twisted unnormalized object
+\[
+\widetilde Z_n[A]
+\equiv
+\Tr_{\HH^{\otimes n}}\sq{S_A^{\mathrm{gr}}\br{\e^{-\beta H}}^{\otimes n}}
+\]
+from the normalized quantity
+\[
+Z_n[A]=\Tr_A(\rho_A^n)=\frac{\widetilde Z_n[A]}{Z_1^n}.
+\]
+This distinction is essential at first order: the twisted replica theory
+computes the derivative of $\ln \widetilde Z_n[A]$, whereas the normalized
+object relevant for the Renyi entropy requires subtracting $n \ln Z_1$.
+\end{abstract}
+
+\tableofcontents
+
+\section{Setup and normalization convention}
+
+Let the total Hilbert space factorize as
+\begin{equation}
+\HH=\HA\otimes \HB,
+\label{eq:Hfactor}
+\end{equation}
+where $A$ is the subsystem of interest and $B=\bar A$ is its complement. The
+thermal density matrix is
+\begin{equation}
+\rho=\frac{\e^{-\beta H}}{Z_1},
+\qquad
+Z_1=\Tr_{\HH}\e^{-\beta H},
+\qquad
+\rho_A=\Tr_B\rho.
+\label{eq:rho-def}
+\end{equation}
+We define the normalized replica partition function by
+\begin{equation}
+Z_n[A]\equiv \Tr_A(\rho_A^n).
+\label{eq:Zn-normalized}
+\end{equation}
+Hence the Renyi entropy is
+\begin{equation}
+S_A^{(n)}=\frac{1}{1-n}\ln Z_n[A].
+\label{eq:renyi-normalized}
+\end{equation}
+
+It is often useful to introduce the twisted but unnormalized quantity
+\begin{equation}
+\widetilde Z_n[A]\equiv
+\Tr_{\HH^{\otimes n}}\sq{S_A^{\mathrm{gr}}\br{\e^{-\beta H}}^{\otimes n}},
+\label{eq:Zn-unnormalized}
+\end{equation}
+where $S_A^{\mathrm{gr}}$ is the fermionic graded cyclic permutation operator
+to be defined below. The relation between the two objects is
+\begin{equation}
+Z_n[A]=\frac{\widetilde Z_n[A]}{Z_1^n},
+\qquad
+\ln Z_n[A]=\ln \widetilde Z_n[A]-n\ln Z_1.
+\label{eq:Zn-tilde-relation}
+\end{equation}
+
+\begin{remark}
+Equations \eqref{eq:renyi-normalized} and \eqref{eq:Zn-tilde-relation} are
+equivalent ways of organizing the same physics. The important point is that
+one must use one convention consistently. In particular, if one computes
+\[
+\widetilde Z_n[A]
+=
+\Tr_{\HH^{\otimes n}}\sq{S_A^{\mathrm{gr}}\br{\e^{-\beta H}}^{\otimes n}},
+\]
+then the normalized quantity entering the entropy is obtained only after
+subtracting $n \ln Z_1$.
+\end{remark}
+
+\section{Replica Hilbert space and the graded cyclic permutation operator}
+
+On $n$ replicas, the Hilbert space is
+\begin{equation}
+\HH^{\otimes n}=(\HA\otimes \HB)^{\otimes n}
+\cong
+\HA^{\otimes n}\otimes \HB^{\otimes n}.
+\label{eq:replica-space}
+\end{equation}
+Choose homogeneous basis vectors
+$\{\lvert a\rangle\}\subset\HA$ and $\{\lvert b\rangle\}\subset\HB$, where
+``homogeneous'' means that each $\lvert a\rangle$ has a definite fermion
+parity $p(a)\in\{0,1\}$. A replicated basis vector is
+\begin{equation}
+\lvert a_1,b_1;\dots;a_n,b_n\rangle
+\equiv
+\bigotimes_{\alpha=1}^n
+\br{\lvert a_\alpha\rangle_A\otimes \lvert b_\alpha\rangle_B}.
+\label{eq:replicated-basis}
+\end{equation}
+
+\begin{definition}[Graded cyclic permutation on subsystem $A$]
+The fermionic replica construction uses the \emph{graded} cyclic permutation
+operator $S_A^{\mathrm{gr}}$, not the plain cyclic permutation. On homogeneous
+basis vectors it acts as
+\begin{equation}
+S_A^{\mathrm{gr}}
+\lvert a_1,b_1;\dots;a_n,b_n\rangle
+=
+(-1)^{p(a_1)\sum_{\beta=2}^n p(a_\beta)}
+\lvert a_2,b_1;a_3,b_2;\dots;a_1,b_n\rangle.
+\label{eq:Sagr-action}
+\end{equation}
+Equivalently,
+\begin{equation}
+S_A^{\mathrm{gr}}
+=
+\sum_{a_1,\dots,a_n}^{\mathrm{hom.}}
+(-1)^{p(a_1)\sum_{\beta=2}^n p(a_\beta)}
+\lvert a_2,\dots,a_n,a_1\rangle_A
+\,{}_A\langle a_1,\dots,a_n|
+\otimes \1_B^{\otimes n}.
+\label{eq:Sagr-explicit}
+\end{equation}
+\end{definition}
+
+\begin{remark}
+Equation \eqref{eq:Sagr-action} is the standard Koszul sign associated with a
+cyclic permutation in a fermionic tensor product. This graded sign is the
+entire reason that the replica-sector phases are shifted from
+$2\pi m/n$ to $(2m+1)\pi/n$.
+\end{remark}
+
+\section{Graded-swap representation of $\Tr_A(\rho_A^n)$}
+
+The matrix elements of the reduced density matrix are
+\begin{equation}
+(\rho_A)_{aa'}
+\equiv
+\langle a\lvert \rho_A\rvert a'\rangle
+=
+\sum_b \langle a,b\lvert \rho \rvert a',b\rangle.
+\label{eq:rhoA-components}
+\end{equation}
+Therefore
+\begin{align}
+Z_n[A]
+&=\Tr_A(\rho_A^n)
+\notag\\
+&=
+\sum_{a_1,\dots,a_n}
+(\rho_A)_{a_1a_2}
+(\rho_A)_{a_2a_3}
+\cdots
+(\rho_A)_{a_n a_1}
+\notag\\
+&=
+\sum_{a_1,\dots,a_n}
+\sum_{b_1,\dots,b_n}
+\langle a_1,b_1\lvert \rho \rvert a_2,b_1\rangle
+\langle a_2,b_2\lvert \rho \rvert a_3,b_2\rangle
+\cdots
+\langle a_n,b_n\lvert \rho \rvert a_1,b_n\rangle.
+\label{eq:Zn-component}
+\end{align}
+This makes the sewing pattern manifest:
+\begin{itemize}[leftmargin=2em]
+\item the $B$ index closes within the same replica,
+\item the $A$ index closes cyclically across replicas.
+\end{itemize}
+
+For fermions, the corresponding operator identity uses the graded swap:
+\begin{proposition}[Graded-swap representation]
+For any fermionic density matrix $\rho$ on $\HH=\HA\otimes \HB$,
+\begin{equation}
+\Tr_A(\rho_A^n)
+=
+\frac{1}{Z_1^n}
+\Tr_{\HH^{\otimes n}}
+\sq{
+S_A^{\mathrm{gr}}
+\br{\e^{-\beta H}}^{\otimes n}
+}
+=
+\frac{\widetilde Z_n[A]}{Z_1^n}.
+\label{eq:graded-swap-identity}
+\end{equation}
+\end{proposition}
+
+\begin{remark}
+If one replaced $S_A^{\mathrm{gr}}$ by the ordinary cyclic permutation, the
+full-system limit $A=\HH$ would be wrong already in the free theory: for
+$n=2$ one would obtain a bosonic-looking periodic sector instead of the
+correct fermionic half-shifted sectors $\pm \ii$.
+\end{remark}
+
+\section{Fermionic coherent states and the graded path integral}
+
+Let $c_i,c_i^\dagger$ denote fermionic annihilation and creation operators,
+where $i$ collects all one-particle labels. For Grassmann variables
+$\eta_i,\bar\eta_i$, define the coherent states
+\begin{equation}
+\lvert \eta\rangle
+\equiv
+\exp\br{-\sum_i \eta_i c_i^\dagger}\lvert 0\rangle,
+\qquad
+\langle \bar\eta\rvert
+\equiv
+\langle 0\rvert \exp\br{-\sum_i c_i \bar\eta_i}.
+\label{eq:coherent-state-def}
+\end{equation}
+They satisfy
+\begin{equation}
+c_i\lvert\eta\rangle=\eta_i\lvert\eta\rangle,
+\qquad
+\langle\bar\eta\rvert c_i^\dagger=\langle\bar\eta\rvert \bar\eta_i,
+\label{eq:coherent-eigen}
+\end{equation}
+with overlap
+\begin{equation}
+\langle \bar\eta\vert \eta'\rangle
+=
+\exp\br{\sum_i \bar\eta_i \eta'_i}.
+\label{eq:coherent-overlap}
+\end{equation}
+The identity resolution is
+\begin{equation}
+\1
+=
+\int \dd(\bar\eta,\eta)\,
+\e^{-\bar\eta\eta}
+\lvert \eta\rangle\langle \bar\eta\rvert,
+\qquad
+\bar\eta\eta\equiv \sum_i \bar\eta_i\eta_i,
+\label{eq:coherent-identity}
+\end{equation}
+and the fermionic trace of an operator $O$ is
+\begin{equation}
+\Tr O
+=
+\int \dd(\bar\eta,\eta)\,
+\e^{-\bar\eta\eta}
+\langle -\bar\eta\rvert O\rvert \eta\rangle.
+\label{eq:trace-formula}
+\end{equation}
+
+For $n$ replicas, introduce independent Grassmann variables
+\begin{equation}
+\eta^{(\alpha)}=(\eta_A^{(\alpha)},\eta_B^{(\alpha)}),
+\qquad
+\bar\eta^{(\alpha)}=(\bar\eta_A^{(\alpha)},\bar\eta_B^{(\alpha)}),
+\qquad
+\alpha=1,\dots,n,
+\label{eq:replica-grassmann}
+\end{equation}
+and replicated coherent states
+\begin{equation}
+\lvert \eta\rangle
+\equiv \bigotimes_{\alpha=1}^n \lvert \eta^{(\alpha)}\rangle,
+\qquad
+\langle \bar\eta\rvert
+\equiv \bigotimes_{\alpha=1}^n \langle \bar\eta^{(\alpha)}\rvert.
+\label{eq:replica-coherent}
+\end{equation}
+
+Applying \eqref{eq:trace-formula} to \eqref{eq:graded-swap-identity},
+\begin{equation}
+\widetilde Z_n[A]
+=
+\int \prod_{\alpha=1}^n \dd\br{\bar\eta^{(\alpha)},\eta^{(\alpha)}}
+\exp\sq{-\sum_{\alpha=1}^n \bar\eta^{(\alpha)}\eta^{(\alpha)}}
+\,
+\langle -\bar\eta\rvert S_A^{\mathrm{gr}}
+\br{\e^{-\beta H}}^{\otimes n}\rvert \eta\rangle.
+\label{eq:Zn-before-path-int}
+\end{equation}
+
+The graded cyclic permutation modifies the coherent-state sewing on $A$ by the
+Koszul sign. After the standard Grassmann bookkeeping, one obtains the mixed
+boundary conditions
+\begin{equation}
+\psi_A^{(\alpha)}(\beta^-)=\psi_A^{(\alpha+1)}(0^+),
+\qquad
+\alpha=1,\dots,n-1,
+\label{eq:bc-A-nonfinal}
+\end{equation}
+\begin{equation}
+\psi_A^{(n)}(\beta^-)=-\psi_A^{(1)}(0^+),
+\label{eq:bc-A-final}
+\end{equation}
+while on $B$ one keeps the ordinary anti-periodic closure replica by replica:
+\begin{equation}
+\psi_B^{(\alpha)}(\beta^-)
+=
+-\psi_B^{(\alpha)}(0^+),
+\qquad
+\alpha=1,\dots,n.
+\label{eq:bc-B}
+\end{equation}
+
+Equivalently,
+\begin{equation}
+\widetilde Z_n[A]
+=
+\int \prod_{\alpha=1}^n \cD[\bar\psi^{(\alpha)},\psi^{(\alpha)}]
+\exp\sq{-\sum_{\alpha=1}^n S[\bar\psi^{(\alpha)},\psi^{(\alpha)}]}
+\label{eq:Zn-path-integral}
+\end{equation}
+with Euclidean action
+\begin{equation}
+S[\bar\psi,\psi]
+=
+\int_0^\beta \dd\tau\,
+\cb{
+\sum_i \bar\psi_i(\tau)\,\partial_\tau\psi_i(\tau)
++
+H\br{\bar\psi(\tau),\psi(\tau)}
+}
+\label{eq:euclidean-action}
+\end{equation}
+and the graded mixed gluing \eqref{eq:bc-A-nonfinal}--\eqref{eq:bc-B}.
+
+\section{Matrix form of the graded gluing and graded replica Fourier modes}
+
+Let $P_A$ and $P_B$ be the one-particle projectors onto $A$ and $B$:
+\begin{equation}
+P_A+P_B=\1,
+\qquad
+P_A P_B=0.
+\label{eq:AB-projectors}
+\end{equation}
+Introduce the replica-space vector
+\begin{equation}
+\Psi_i(\tau)
+=
+\begin{pmatrix}
+\psi_i^{(1)}(\tau)\\
+\psi_i^{(2)}(\tau)\\
+\vdots\\
+\psi_i^{(n)}(\tau)
+\end{pmatrix}.
+\label{eq:replica-vector}
+\end{equation}
+
+The graded shift matrix $K_n$ is the $n\times n$ matrix
+\begin{equation}
+K_n
+\begin{pmatrix}
+x_1\\x_2\\ \vdots\\ x_n
+\end{pmatrix}
+=
+\begin{pmatrix}
+x_2\\x_3\\ \vdots\\ -x_1
+\end{pmatrix}.
+\label{eq:graded-shift-action}
+\end{equation}
+Equivalently,
+\begin{equation}
+(K_n)_{\alpha\beta}
+=
+\delta_{\alpha,\beta-1}
+-\delta_{\alpha,n}\delta_{\beta,1}.
+\label{eq:graded-shift-matrix}
+\end{equation}
+Then the mixed boundary conditions become
+\begin{equation}
+\Psi(\beta^-)
+=
+\sq{
+-P_B\otimes \1_n
++
+P_A\otimes K_n
+}\Psi(0^+).
+\label{eq:matrix-bc-graded}
+\end{equation}
+
+Because $K_n^n=-\1_n$, its eigenvalues are the $n$ roots of $-1$:
+\begin{equation}
+\lambda_m=\e^{\ii q_m},
+\qquad
+q_m=\frac{(2m+1)\pi}{n},
+\qquad
+m=0,\dots,n-1.
+\label{eq:graded-eigs}
+\end{equation}
+We therefore define the graded replica Fourier modes by
+\begin{equation}
+\psi_i^{(m)}(\tau)
+=
+\frac{1}{\sqrt n}
+\sum_{\alpha=1}^n
+\e^{-\ii q_m \alpha}\psi_i^{(\alpha)}(\tau).
+\label{eq:graded-replica-FT}
+\end{equation}
+These diagonalize the graded shift:
+\begin{equation}
+K_n \psi^{(m)} = \e^{\ii q_m}\psi^{(m)}.
+\label{eq:K-eigenvalue}
+\end{equation}
+
+Hence the sector boundary conditions are
+\begin{equation}
+\psi^{(m)}(\beta^-)
+=
+\br{
+-P_B
++
+\e^{\ii q_m}P_A
+}\psi^{(m)}(0^+).
+\label{eq:sector-bc-graded-direct}
+\end{equation}
+It is convenient to rewrite this as
+\begin{equation}
+\psi^{(m)}(\beta^-)
+=
+-\Omega_m \psi^{(m)}(0^+),
+\qquad
+\Omega_m\equiv P_B-\e^{\ii q_m}P_A.
+\label{eq:Omega-def}
+\end{equation}
+
+Special cases:
+\begin{itemize}[leftmargin=2em]
+\item $A=\varnothing$: $\Omega_m=\1$, so one recovers the ordinary
+anti-periodic boundary condition.
+\item $A=\HH$: $\Omega_m=-\e^{\ii q_m}\1$, so the full system acquires the
+correct fermionic half-shifted phases $\e^{\ii q_m}$.
+\item $n=2$: $q_0=\pi/2$ and $q_1=3\pi/2$, so the two $A$-sector phases are
+$+\ii$ and $-\ii$.
+\end{itemize}
+
+\section{Quadratic Hamiltonian and the convention for the free Green's function}
+
+We now specialize to the Hubbard model
+\begin{equation}
+H
+=
+-\sum_{ij,\sigma} t_{ij}\, c_{i\sigma}^\dagger c_{j\sigma}
++
+U\sum_i n_{i\up}n_{i\dn}
+-
+\mu \sum_{i,\sigma} n_{i\sigma}.
+\label{eq:Hubbard-H}
+\end{equation}
+We split it into
+\begin{equation}
+H=H_0+H_{\mathrm{int}},
+\qquad
+H_{\mathrm{int}}=U\sum_i n_{i\up}n_{i\dn},
+\label{eq:H-split}
+\end{equation}
+with one-body kernel
+\begin{equation}
+(H_0)_{ij,\sigma}=h_{ij}=-t_{ij}-\mu\delta_{ij}.
+\label{eq:h-def}
+\end{equation}
+The quadratic Euclidean action is
+\begin{equation}
+S_0
+=
+\int_0^\beta \dd\tau \sum_{ij,\sigma}
+\bar c_{i\sigma}(\tau)\sq{\delta_{ij}\partial_\tau + h_{ij}}c_{j\sigma}(\tau).
+\label{eq:S0}
+\end{equation}
+
+\subsection*{Convention}
+We fix the sign convention
+\begin{equation}
+\boxed{
+\bar G_\sigma(X,X')
+\equiv
+\langle T_\tau\, c_\sigma(X)c_\sigma^\dagger(X')\rangle_0,
+}
+\label{eq:Gbar-def-single}
+\end{equation}
+with \emph{no} extra minus sign in front of $T_\tau$.
+
+\begin{remark}
+In many textbooks one instead defines
+\[
+G_\sigma^{\mathrm{std}}(X,X')\equiv
+-\langle T_\tau\, c_\sigma(X)c_\sigma^\dagger(X')\rangle_0.
+\]
+The two conventions are related by
+\[
+\bar G_\sigma=-G_\sigma^{\mathrm{std}}.
+\]
+Therefore any formula imported from the standard convention must acquire an
+overall minus sign when rewritten in terms of $\bar G$.
+\end{remark}
+
+\section{Free graded replica Green's function on the $n$-sheeted manifold}
+
+\subsection{Definition in replica space}
+
+For the replicated free theory with the graded boundary conditions
+\eqref{eq:bc-A-nonfinal}--\eqref{eq:bc-B}, define
+\begin{equation}
+\bar G_{\sigma;\alpha\beta}^{(n)}(i,\tau;j,\tau')
+\equiv
+\left\langle
+T_\tau\,
+c_{i\sigma}^{(\alpha)}(\tau)\,
+c_{j\sigma}^{(\beta)\dagger}(\tau')
+\right\rangle_{0,n}.
+\label{eq:Gbar-replica-def}
+\end{equation}
+Passing to the graded sector basis \eqref{eq:graded-replica-FT}, define
+\begin{equation}
+\bar G_\sigma^{(m)}(i,\tau;j,\tau')
+\equiv
+\left\langle
+T_\tau\,
+\psi_{i\sigma}^{(m)}(\tau)\,
+\psi_{j\sigma}^{(m)\dagger}(\tau')
+\right\rangle_{0,n}.
+\label{eq:Gm-def}
+\end{equation}
+The inverse transform is
+\begin{equation}
+\bar G_{\sigma;\alpha\beta}^{(n)}(i,\tau;j,\tau')
+=
+\frac{1}{n}
+\sum_{m=0}^{n-1}
+\e^{\ii q_m(\alpha-\beta)}
+\bar G_\sigma^{(m)}(i,\tau;j,\tau').
+\label{eq:G-replica-from-m}
+\end{equation}
+
+\subsection{Equation of motion and jump condition}
+
+Because the convention \eqref{eq:Gbar-replica-def} carries no extra prefactor
+minus sign, the equation of motion is
+\begin{equation}
+\boxed{
+\br{\partial_\tau+\bh}\,\bar G_\sigma^{(m)}(\tau,\tau')
+=
+\delta(\tau-\tau')\,\bI.
+}
+\label{eq:EOM-Gbar}
+\end{equation}
+Integrating across $\tau=\tau'$ yields the equal-time jump
+\begin{equation}
+\boxed{
+\bar G_\sigma^{(m)}(\tau'^+,\tau')
+-
+\bar G_\sigma^{(m)}(\tau'^-,\tau')
+=
+\bI.
+}
+\label{eq:jump-Gbar}
+\end{equation}
+The sector boundary condition is
+\begin{equation}
+\bar G_\sigma^{(m)}(\beta^-,\tau')
+=
+-\Omega_m\,\bar G_\sigma^{(m)}(0^+,\tau').
+\label{eq:G-boundary-sector}
+\end{equation}
+
+\subsection{Exact solution in one graded sector}
+
+Fix $\tau'$. For $\tau\neq\tau'$, the homogeneous equation implies
+\begin{equation}
+\bar G_\sigma^{(m)}(\tau,\tau')
+=
+\e^{-\tau\bh}\,C_\pm^{(m)}(\tau'),
+\qquad
+\text{for } \tau\gtrless\tau',
+\label{eq:piecewise-homogeneous}
+\end{equation}
+with two a priori different matrices $C_+^{(m)}(\tau')$ and
+$C_-^{(m)}(\tau')$.
+
+Using the boundary condition \eqref{eq:G-boundary-sector}, with
+$\beta^- > \tau'$ and $0^+<\tau'$, gives
+\begin{equation}
+\e^{-\beta\bh} C_+^{(m)}(\tau')
+=
+-\Omega_m\, C_-^{(m)}(\tau').
+\label{eq:boundary-Cpm}
+\end{equation}
+The jump condition \eqref{eq:jump-Gbar} gives
+\begin{equation}
+\e^{-\tau' \bh}
+\br{C_+^{(m)}(\tau')-C_-^{(m)}(\tau')}
+=
+\bI.
+\label{eq:jump-Cpm}
+\end{equation}
+
+Define
+\begin{equation}
+B_m\equiv \bI+\Omega_m^{-1}\e^{-\beta\bh}.
+\label{eq:Bm-def}
+\end{equation}
+Whenever $B_m$ is invertible, define
+\begin{equation}
+A_m\equiv B_m^{-1}
+=
+\sq{\bI+\Omega_m^{-1}\e^{-\beta\bh}}^{-1}.
+\label{eq:Am-def}
+\end{equation}
+Solving \eqref{eq:boundary-Cpm}--\eqref{eq:jump-Cpm} gives
+\begin{equation}
+C_+^{(m)}(\tau') = A_m \e^{\tau'\bh},
+\qquad
+C_-^{(m)}(\tau') = \br{A_m-\bI}\e^{\tau'\bh}.
+\label{eq:Cpm-solution}
+\end{equation}
+Therefore
+\begin{equation}
+\boxed{
+\bar G_\sigma^{(m)}(\tau,\tau')
+=
+\begin{cases}
+\e^{-\tau\bh}\,A_m\,\e^{\tau'\bh},
+& \tau>\tau',\\[6pt]
+\e^{-\tau\bh}\,\br{A_m-\bI}\,\e^{\tau'\bh},
+& \tau<\tau'.
+\end{cases}
+}
+\label{eq:Gm-piecewise}
+\end{equation}
+Equivalently,
+\begin{equation}
+\boxed{
+\bar G_\sigma^{(m)}(\tau,\tau')
+=
+\e^{-\tau\bh}
+\sq{
+\Theta(\tau-\tau')A_m
++
+\Theta(\tau'-\tau)\br{A_m-\bI}
+}
+\e^{\tau'\bh}.
+}
+\label{eq:Gm-step-function}
+\end{equation}
+
+The formula \eqref{eq:Gm-piecewise} is the correct generic solution. It
+depends on $\tau$ and $\tau'$ separately unless $\bh$ commutes with $A_m$.
+
+\paragraph{Right boundary condition.}
+Because $\Omega_m$ is unitary,
+\begin{equation}
+\Omega_m^\dagger=\Omega_m^{-1}.
+\label{eq:Omega-unitary}
+\end{equation}
+One checks directly from \eqref{eq:Gm-piecewise} that
+\begin{equation}
+\bar G_\sigma^{(m)}(\tau,\beta^-)
+=
+-\bar G_\sigma^{(m)}(\tau,0^+)\Omega_m^\dagger.
+\label{eq:right-boundary}
+\end{equation}
+
+\subsection{Explicit reconstruction for $n=2$}
+
+For $n=2$ one has
+\begin{equation}
+q_0=\frac{\pi}{2},
+\qquad
+q_1=\frac{3\pi}{2},
+\qquad
+\e^{\ii q_0}=+\ii,
+\qquad
+\e^{\ii q_1}=-\ii.
+\label{eq:n2-phases}
+\end{equation}
+Hence
+\begin{equation}
+\bar G_{\sigma;11}^{(2)}=\bar G_{\sigma;22}^{(2)}
+=
+\frac{\bar G_\sigma^{(0)}+\bar G_\sigma^{(1)}}{2},
+\label{eq:n2-diag}
+\end{equation}
+\begin{equation}
+\bar G_{\sigma;12}^{(2)}
+=
+-\frac{\ii}{2}\br{\bar G_\sigma^{(0)}-\bar G_\sigma^{(1)}},
+\qquad
+\bar G_{\sigma;21}^{(2)}
+=
+\frac{\ii}{2}\br{\bar G_\sigma^{(0)}-\bar G_\sigma^{(1)}}.
+\label{eq:n2-offdiag}
+\end{equation}
+For a real one-body Hamiltonian $\bh$, the two sector Green's functions are
+complex conjugates, so the replica-space Green's functions are real.
+
+\subsection{Numerical construction}
+
+The numerical construction must keep the two times separately.
+
+\medskip
+\textbf{Input:} one-body Hamiltonian matrix $\bh$, projectors $P_A$ and
+$P_B=\bI-P_A$, inverse temperature $\beta$, replica number $n$.
+
+\medskip
+\textbf{Step 1:} compute
+\begin{equation}
+U(\tau)\equiv \e^{-\tau\bh},
+\qquad
+U(\beta)\equiv \e^{-\beta\bh}.
+\label{eq:U-tau}
+\end{equation}
+
+\textbf{Step 2:} for each sector $m=0,\dots,n-1$, define
+\begin{equation}
+q_m=\frac{(2m+1)\pi}{n},
+\qquad
+\Omega_m=P_B-\e^{\ii q_m}P_A.
+\label{eq:Omega-m-numerical}
+\end{equation}
+
+\textbf{Step 3:} form
+\begin{equation}
+B_m=\bI+\Omega_m^{-1}U(\beta),
+\qquad
+A_m=B_m^{-1},
+\label{eq:Bm-numerical}
+\end{equation}
+whenever $B_m$ is invertible.
+
+\textbf{Step 4:} evaluate
+\begin{equation}
+\bar G_\sigma^{(m)}(\tau,\tau')
+=
+\begin{cases}
+U(\tau)A_mU(-\tau'), & \tau>\tau',\\[4pt]
+U(\tau)\br{A_m-\bI}U(-\tau'), & \tau<\tau'.
+\end{cases}
+\label{eq:Gm-numerical-general}
+\end{equation}
+
+\textbf{Step 5:} transform back to replica indices using
+\begin{equation}
+\bar G_{\sigma;\alpha\beta}^{(n)}(i,\tau;j,\tau')
+=
+\frac{1}{n}\sum_{m=0}^{n-1}\e^{\ii q_m(\alpha-\beta)}
+\bar G_\sigma^{(m)}(i,\tau;j,\tau').
+\label{eq:G-back-to-replica}
+\end{equation}
+
+\textbf{Step 6:} for Monte Carlo sampling, use
+\begin{equation}
+\bar G_{\sigma;\alpha\beta}^{(n)}(i,\tau_p;j,\tau_q)
+=
+\br{\bar G_{\sigma;\alpha\beta}^{(n)}(\tau_p,\tau_q)}_{ij}.
+\label{eq:Gpq-mc}
+\end{equation}
+In general there is no reduction to a lookup table depending only on the
+wrapped time difference.
+
+\subsection{Physical interpretation: why time-translation invariance is broken}
+
+In the ordinary thermal theory, the Euclidean time circle is homogeneous: one
+closes the contour by the same anti-periodic rule everywhere, so correlators
+depend only on relative time up to anti-periodic wrapping.
+
+In the entanglement replica theory, the seam at $\tau=0/\beta$ is a genuine
+defect line:
+\begin{itemize}[leftmargin=2em]
+\item on $B$, the field returns to the same replica with the ordinary
+anti-periodic sign;
+\item on $A$, the field is redirected by the graded shift $K_n$.
+\end{itemize}
+Thus the propagator can detect whether the path from $\tau'$ to $\tau$ crosses
+the entanglement seam. If $\bh$ mixes $A$ and $B$, this destroys imaginary-time
+translation invariance.
+
+\subsection{Existence of $A_m$, singular sectors, and zero modes}
+
+The issue is whether
+\begin{equation}
+A_m=\sq{\bI+\Omega_m^{-1}\e^{-\beta\bh}}^{-1}
+\label{eq:Am-existence}
+\end{equation}
+exists. This requires the invertibility of
+\begin{equation}
+B_m=\bI+\Omega_m^{-1}\e^{-\beta\bh}.
+\label{eq:Bm-existence}
+\end{equation}
+
+\begin{proposition}[Singular sector criterion]
+The following are equivalent:
+\begin{enumerate}[leftmargin=2.2em]
+\item $B_m$ is singular;
+\item there exists a nonzero vector $v$ such that
+\begin{equation}
+\Omega_m^{-1}\e^{-\beta\bh}v=-v;
+\label{eq:zero-mode-eigen}
+\end{equation}
+\item there exists a nontrivial homogeneous solution
+\begin{equation}
+\psi(\tau)=\e^{-\tau\bh}v
+\label{eq:homogeneous-mode}
+\end{equation}
+of $(\partial_\tau+\bh)\psi=0$ satisfying
+\begin{equation}
+\psi(\beta^-)=-\Omega_m\psi(0^+).
+\label{eq:homogeneous-twisted-bc}
+\end{equation}
+\end{enumerate}
+\label{prop:zero-mode}
+\end{proposition}
+
+\begin{proof}
+The equivalence of (1) and (2) is immediate from the definition of $B_m$.
+Given (2), the function \eqref{eq:homogeneous-mode} obeys
+\[
+\psi(\beta^-)=\e^{-\beta\bh}v=-\Omega_m v=-\Omega_m\psi(0^+),
+\]
+so (3) follows. Conversely, any nontrivial homogeneous solution satisfying
+\eqref{eq:homogeneous-twisted-bc} yields \eqref{eq:zero-mode-eigen} by setting
+$v=\psi(0^+)$.
+\end{proof}
+
+Introduce the Euclidean monodromy operator
+\begin{equation}
+M_m\equiv -\Omega_m^{-1}\e^{-\beta\bh}.
+\label{eq:Mm-def}
+\end{equation}
+Then $B_m$ is singular iff $M_m$ has eigenvalue $+1$.
+
+\paragraph{Commuting case.}
+If $[\bh,\Omega_m]=0$, choose simultaneous eigenvectors $u$ with
+\begin{equation}
+\bh u=\varepsilon u,
+\qquad
+\Omega_m u=\omega_m u.
+\label{eq:commuting-eigenvectors}
+\end{equation}
+Then the singularity condition becomes
+\begin{equation}
+1+\e^{-\beta\varepsilon}\omega_m^{-1}=0.
+\label{eq:singularity-commuting}
+\end{equation}
+On $B$, one has $\omega_m=1$, so \eqref{eq:singularity-commuting} has no
+solution for real $\varepsilon$. On $A$, one has
+$\omega_m=-\e^{\ii q_m}$, where $q_m$ is half-shifted as in
+\eqref{eq:graded-eigs}; again there is no full-system boson-like periodic
+sector. Thus the spurious full-system periodic zero mode that appears in the
+naive bosonic-looking construction is absent in the corrected fermionic
+graded-swap theory.
+
+\section{Perturbation expansion and determinant structure}
+
+We now return to the interacting Hubbard model \eqref{eq:Hubbard-H}. In the
+replicated theory the interaction is diagonal in replica space:
+\begin{equation}
+H_{\mathrm{int}}^{(n)}
+=
+U\sum_{\alpha=1}^n\sum_i
+n_{i\up}^{(\alpha)}n_{i\dn}^{(\alpha)}.
+\label{eq:Hint-replica}
+\end{equation}
+Define the free graded-replica average $\langle\cdots\rangle_{0,n}$ using the
+free replica Green's function \eqref{eq:Gbar-replica-def}. Then the
+\emph{unnormalized twisted} object expands as
+\begin{equation}
+\widetilde Z_n[A]
+=
+\widetilde Z_{0,n}[A]\,
+\left\langle
+T_\tau \exp\sq{
+-\int_0^\beta \dd\tau\,
+U\sum_{\alpha=1}^n\sum_i
+n_{i\up}^{(\alpha)}(\tau)n_{i\dn}^{(\alpha)}(\tau)
+}
+\right\rangle_{0,n}.
+\label{eq:Zn-expand-start}
+\end{equation}
+
+Let
+\begin{equation}
+X_\ell\equiv (i_\ell,\tau_\ell,\alpha_\ell),
+\qquad
+\ell=1,\dots,k.
+\label{eq:Xl-def}
+\end{equation}
+At order $k$ one finds
+\begin{equation}
+\frac{\widetilde Z_n^{(k)}[A]}{\widetilde Z_{0,n}[A]}
+=
+\frac{(-U)^k}{k!}
+\sum_{i_1,\dots,i_k}
+\sum_{\alpha_1,\dots,\alpha_k}
+\int_0^\beta \dd\tau_1\cdots \int_0^\beta \dd\tau_k
+\,
+\det\sq{\bar G_{\up}^{(n)}(X_p,X_q)}_{p,q=1}^k
+\,
+\det\sq{\bar G_{\dn}^{(n)}(X_p,X_q)}_{p,q=1}^k.
+\label{eq:Zn-k-det-full-domain}
+\end{equation}
+Equivalently, over ordered times
+\begin{equation}
+0<\tau_1<\tau_2<\cdots<\tau_k<\beta,
+\label{eq:ordered-times}
+\end{equation}
+the factor $1/k!$ disappears:
+\begin{equation}
+\frac{\widetilde Z_n^{(k)}[A]}{\widetilde Z_{0,n}[A]}
+=
+(-U)^k
+\sum_{i_1,\dots,i_k}
+\sum_{\alpha_1,\dots,\alpha_k}
+\int_{0<\tau_1<\cdots<\tau_k<\beta}
+\prod_{\ell=1}^k \dd\tau_\ell\,
+\det\sq{\bar G_{\up}^{(n)}(X_p,X_q)}_{p,q=1}^k
+\,
+\det\sq{\bar G_{\dn}^{(n)}(X_p,X_q)}_{p,q=1}^k.
+\label{eq:Zn-k-det-ordered}
+\end{equation}
+
+Thus
+\begin{equation}
+\ln Z_n[A]
+=
+\ln \widetilde Z_n[A]-n\ln Z_1
+=
+\ln \widetilde Z_{0,n}[A]-n\ln Z_{0,1}
+\,+\,\text{connected corrections}.
+\label{eq:logZn-connected}
+\end{equation}
+The subtraction by $n\ln Z_1$ is not optional; it is part of the definition
+of the normalized object $Z_n[A]=\Tr_A(\rho_A^n)$.
+
+\section{Shifted expansion}
+
+\subsection{Homotopic Hamiltonian and the correct sign of the shift}
+
+For connected-determinant style reorganizations, introduce the homotopic
+Hamiltonian
+\begin{equation}
+H(\xi)
+=
+-\sum_{ij,\sigma} t_{ij}\, c_{i\sigma}^\dagger c_{j\sigma}
++
+\xi\br{
+U\sum_i n_{i\up}n_{i\dn}
+-
+\sum_{i,\sigma}\alpha_\sigma n_{i\sigma}
+}
+-
+\sum_{i,\sigma}(\mu_\sigma-\alpha_\sigma)n_{i\sigma}.
+\label{eq:Hxi}
+\end{equation}
+Equivalently,
+\begin{equation}
+H(\xi)=H_0' + \xi\,H_{\mathrm{int}}',
+\label{eq:Hxi-split}
+\end{equation}
+with
+\begin{align}
+H_0'
+&=
+-\sum_{ij,\sigma} t_{ij}\, c_{i\sigma}^\dagger c_{j\sigma}
+-
+\sum_{i,\sigma}(\mu_\sigma-\alpha_\sigma)n_{i\sigma},
+\label{eq:H0prime}
+\\
+H_{\mathrm{int}}'
+&=
+U\sum_i n_{i\up}n_{i\dn}
+-
+\sum_i \alpha_\up n_{i\up}
+-
+\sum_i \alpha_\dn n_{i\dn}.
+\label{eq:Hintprime}
+\end{align}
+This can be rewritten as
+\begin{equation}
+H_{\mathrm{int}}'
+=
+U\sum_i
+\cb{
+\br{n_{i\up}-\frac{\alpha_\dn}{U}}
+\br{n_{i\dn}-\frac{\alpha_\up}{U}}
+-
+\frac{\alpha_\up\alpha_\dn}{U^2}
+}.
+\label{eq:Hint-shifted-factorized}
+\end{equation}
+Therefore the determinant shift is
+\begin{equation}
+\boxed{
+\bar G_\sigma^{(n)}(X_p,X_q)
+\ \longrightarrow\
+\widetilde G_\sigma^{(n)}(X_p,X_q)
+\equiv
+\bar G_\sigma^{(n)}(X_p,X_q)
++
+\delta_{pq}\,\frac{\alpha_{\bar\sigma}}{U}.
+}
+\label{eq:shifted-G}
+\end{equation}
+The shift is positive and occurs in the opposite spin channel.
+
+\subsection{Shifted determinant structure}
+
+With the shift \eqref{eq:shifted-G}, the twisted order-$k$ integrand takes the
+form
+\begin{equation}
+\det\sq{\widetilde G_{\up}^{(n)}(X_p,X_q)}_{p,q=1}^k
+\;
+\det\sq{\widetilde G_{\dn}^{(n)}(X_p,X_q)}_{p,q=1}^k.
+\label{eq:shifted-determinant}
+\end{equation}
+For $k\ge 2$, the artificial terms generated by the diagonal shifts are
+disconnected and are removed in the connected expansion of
+$\ln \widetilde Z_n[A]$.
+
+\subsection{Why the first order is special}
+
+At $k=1$, the diagonal shift would naively generate a term corresponding to
+two crosses attached to the same interaction line. This is precisely the
+constant subtraction in \eqref{eq:Hint-shifted-factorized}, so it must not be
+double counted.
+
+The first-order contribution to the \emph{twisted unnormalized} object is
+\begin{equation}
+\boxed{
+\partial_\xi \ln \widetilde Z_n[A]\Big|_{\xi=0}
+=
+-U
+\sum_{\alpha=1}^n
+\sum_i
+\int_0^\beta \dd\tau\,
+\cb{
+\br{
+\bar G_{\up;\alpha\alpha}^{(n)}(i,\tau;i,\tau^+)
++\frac{\alpha_\dn}{U}
+}
+\br{
+\bar G_{\dn;\alpha\alpha}^{(n)}(i,\tau;i,\tau^+)
++\frac{\alpha_\up}{U}
+}
+-
+\frac{\alpha_\up\alpha_\dn}{U^2}
+}.
+}
+\label{eq:lnZn1-twisted}
+\end{equation}
+This is the sign-correct and shift-correct first-order formula in the present
+convention.
+
+The equal-time symbol in \eqref{eq:lnZn1-twisted} is a lower-branch limit.
+In \(\bar G(i,\tau;i,\tau^+)\), the second time argument is infinitesimally
+later than the first one, so the piecewise formula must be evaluated with
+\(\tau_1<\tau_2\):
+\[
+  \bar G^{(m)}(\tau,\tau^+)
+  =
+  \e^{-\tau\bh}\br{A_m-\bI}\e^{\tau\bh}.
+\]
+The upper branch would instead correspond to
+\(\bar G^{(m)}(\tau^+,\tau)\).  In the C++ implementation this convention is
+encoded by setting \(\tau_1=\tau_2=\tau\) as Chebyshev coordinates but passing
+\(\texttt{use\_upper\_branch=false}\); the equality of the stored coordinates
+represents the lower-side limit, not an average of the two branches.
+
+For the normalized quantity $Z_n[A]=\widetilde Z_n[A]/Z_1^n$, one must also
+subtract the ordinary one-replica thermal contribution:
+\begin{equation}
+\boxed{
+\partial_\xi \ln Z_n[A]\Big|_{\xi=0}
+=
+\partial_\xi \ln \widetilde Z_n[A]\Big|_{\xi=0}
+-
+n\,\partial_\xi \ln Z_1\Big|_{\xi=0}.
+}
+\label{eq:lnZn1-normalized}
+\end{equation}
+Here
+\begin{equation}
+\partial_\xi \ln Z_1\Big|_{\xi=0}
+=
+-U
+\sum_i
+\int_0^\beta \dd\tau\,
+\cb{
+\br{
+\bar G_{\up}^{\mathrm{th}}(i,\tau;i,\tau^+)
++\frac{\alpha_\dn}{U}
+}
+\br{
+\bar G_{\dn}^{\mathrm{th}}(i,\tau;i,\tau^+)
++\frac{\alpha_\up}{U}
+}
+-
+\frac{\alpha_\up\alpha_\dn}{U^2}
+}.
+\label{eq:lnZ1-first-order}
+\end{equation}
+
+For $n=2$, equation \eqref{eq:lnZn1-normalized} becomes
+\begin{equation}
+\partial_\xi \ln Z_2[A]\Big|_{\xi=0}
+=
+\partial_\xi \ln \widetilde Z_2[A]\Big|_{\xi=0}
+-
+2\,\partial_\xi \ln Z_1\Big|_{\xi=0}.
+\label{eq:n2-normalized-first-order}
+\end{equation}
+This is exactly the object compared against the exact-diagonalization
+finite-difference calculation.
+
+\section{Relation to the entropy}
+
+The normalized Renyi entropy is
+\begin{equation}
+S_A^{(n)}=\frac{1}{1-n}\ln Z_n[A]
+=
+\frac{1}{1-n}\br{\ln \widetilde Z_n[A]-n\ln Z_1}.
+\label{eq:entropy-final}
+\end{equation}
+Thus the subtraction by $n\ln Z_1$ is part of the entropy itself whenever one
+organizes the calculation through the twisted object $\widetilde Z_n[A]$.
+
+\section{Summary of the final convention set}
+
+For ease of reference, here is the corrected convention set.
+
+\begin{enumerate}[leftmargin=2.2em]
+\item The normalized object is
+\[
+Z_n[A]=\Tr_A(\rho_A^n),\qquad
+\rho=\frac{\e^{-\beta H}}{Z_1},
+\qquad
+Z_n[A]=\frac{\widetilde Z_n[A]}{Z_1^n}.
+\]
+
+\item The operator inserted on $A$ is the \emph{graded} cyclic permutation
+$S_A^{\mathrm{gr}}$, not the plain cyclic permutation.
+
+\item The graded replica shift matrix has eigenvalues
+\[
+\lambda_m=\e^{\ii(2m+1)\pi/n}.
+\]
+Accordingly, the sector momenta are
+\[
+q_m=\frac{(2m+1)\pi}{n}.
+\]
+
+\item The sector boundary condition is
+\[
+\psi^{(m)}(\beta^-)= -\Omega_m \psi^{(m)}(0^+),
+\qquad
+\Omega_m=P_B-\e^{\ii q_m}P_A.
+\]
+
+\item The free Green's function is defined by
+\[
+\bar G=\langle T_\tau c c^\dagger\rangle_0
+\]
+with no extra minus sign, so
+\[
+(\partial_\tau+\bh)\bar G=\delta\,\bI
+\]
+and
+\[
+\bar G(\tau^+,\tau)-\bar G(\tau^-,\tau)=\bI.
+\]
+
+\item In one graded sector,
+\[
+\bar G^{(m)}(\tau,\tau')
+=
+\begin{cases}
+\e^{-\tau\bh}A_m\e^{\tau'\bh}, & \tau>\tau',\\[4pt]
+\e^{-\tau\bh}(A_m-\bI)\e^{\tau'\bh}, & \tau<\tau',
+\end{cases}
+\qquad
+A_m=\sq{\bI+\Omega_m^{-1}\e^{-\beta\bh}}^{-1},
+\]
+whenever $A_m$ exists.
+
+\item The replica-space Green's function is reconstructed with the
+half-shifted phases,
+\[
+\bar G_{\alpha\beta}^{(n)}(\tau,\tau')
+=
+\frac1n\sum_{m=0}^{n-1}\e^{\ii q_m(\alpha-\beta)}\bar G^{(m)}(\tau,\tau').
+\]
+For $n=2$, this gives the $\pm \ii$ sector reconstruction
+\eqref{eq:n2-diag}--\eqref{eq:n2-offdiag}.
+
+\item The determinant expansion naturally computes
+$\widetilde Z_n[A]$, not the normalized $Z_n[A]$.
+
+\item In the shifted expansion, the first-order twisted contribution is
+\eqref{eq:lnZn1-twisted}, while the normalized first-order correction is
+\eqref{eq:lnZn1-normalized}.
+\end{enumerate}
+
+\bigskip
+This completes the corrected derivation: starting from the fermionic
+graded-swap representation of $\Tr_A(\rho_A^n)$, continuing through the
+graded path integral and the corrected free replica Green's functions, and
+ending with the determinant perturbation theory and shifted expansion in a
+fully consistent fermionic sign convention.
+
+\end{document}

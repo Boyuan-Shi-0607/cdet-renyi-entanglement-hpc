@@ -1,0 +1,33 @@
+# Build outputs
+/Aphrodite
+/build_hpc/
+/cmake-build-*/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/compile_commands.json
+
+# Runtime outputs
+/logs/
+/histograms/
+
+# Local editor and OS files
+/.idea/
+.DS_Store
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Examples, checkpoints and generated tables belong outside the source tree.
+/build/
+/runs/
+/params.txt
+/chunked_green_tables/
+/mcmcmc_checkpoints/
+/mcmcmc_results/
+*.chk
+*.chk.tmp
+*.o
+*.d
+.venv/

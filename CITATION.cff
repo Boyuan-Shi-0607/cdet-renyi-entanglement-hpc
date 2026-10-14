@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "Please cite the associated manuscript and the exact software commit used. This migration candidate is not yet a release."
+title: "CDet Renyi Entanglement HPC"
+type: software
+authors:
+  - family-names: Shi
+    given-names: Boyuan
+repository-code: "https://github.com/Boyuan-Shi-0607/cdet-renyi-entanglement-hpc"
+preferred-citation:
+  type: article
+  title: "Diagrammatic Monte Carlo for Fermionic Renyi Entanglement Entropy"
+  authors:
+    - family-names: Shi
+      given-names: Boyuan
+  year: 2026

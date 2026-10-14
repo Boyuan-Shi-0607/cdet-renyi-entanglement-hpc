@@ -1,0 +1,73 @@
+#!/bin/bash
+#PBS -N Aphrodite
+#PBS -l walltime=24:00:00
+#PBS -l select=1:ncpus=64:mem=16gb
+#PBS -j oe
+
+set -euo pipefail
+
+module load tools/prod
+module load GCCcore/12.2.0
+module load zlib/1.2.12-GCCcore-12.2.0
+module load binutils/2.39-GCCcore-12.2.0
+module load GCC/12.2.0
+module load numactl/2.0.16-GCCcore-12.2.0
+module load XZ/5.2.7-GCCcore-12.2.0
+module load libxml2/2.10.3-GCCcore-12.2.0
+module load libpciaccess/0.17-GCCcore-12.2.0
+module load hwloc/2.8.0-GCCcore-12.2.0
+module load OpenSSL/1.1
+module load libevent/2.1.12-GCCcore-12.2.0
+module load UCX/1.13.1-GCCcore-12.2.0
+module load libfabric/1.16.1-GCCcore-12.2.0
+module load PMIx/4.2.2-GCCcore-12.2.0
+module load UCC/1.1.0-GCCcore-12.2.0
+module load OpenMPI/4.1.4-GCC-12.2.0
+module load gompi/2022b
+module load Szip/2.1.1-GCCcore-12.2.0
+module load HDF5/1.14.0-gompi-2022b
+
+cd "$PBS_O_WORKDIR" || {
+    echo "Failed to enter PBS_O_WORKDIR=$PBS_O_WORKDIR"
+    exit 1
+}
+
+if [ -f Makefile ] && [ -f params.txt ] && [ -d src ]; then
+    REPO_DIR="$PWD"
+elif [ -f ../Makefile ] && [ -f ../params.txt ] && [ -d ../src ]; then
+    REPO_DIR="$(cd .. && pwd)"
+elif [ -f ../../Makefile ] && [ -f ../../params.txt ] && [ -d ../../src ]; then
+    REPO_DIR="$(cd ../.. && pwd)"
+else
+    echo "Could not locate repo root. Submit this job from the repo root with: qsub run.pbs"
+    exit 1
+fi
+
+cd "$REPO_DIR" || exit 1
+mkdir -p logs histograms build_hpc
+
+JOB_LABEL="${PBS_JOBID:-local}"
+LOG_FILE="logs/Aphrodite_${JOB_LABEL}.log"
+
+echo "Repo: $REPO_DIR"
+echo "Job: ${PBS_JOBID:-local}"
+echo "Host: $(hostname)"
+echo "Started: $(date)"
+echo "Using params.txt:"
+sed -n '1,220p' params.txt
+
+make print-config
+make -j 1
+
+echo "Running ./Aphrodite ..."
+./Aphrodite > "$LOG_FILE" 2>&1
+RUN_STATUS=$?
+
+cat "$LOG_FILE"
+
+make clean
+
+echo "Finished: $(date)"
+echo "Exit status: $RUN_STATUS"
+
+exit "$RUN_STATUS"
